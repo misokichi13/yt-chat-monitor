@@ -84,7 +84,7 @@
       const appContent = document.getElementById("app-content");
 
       if (user) {
-        statusDiv.innerHTML = `ログイン中: <strong>${user.displayName}</strong> (${user.email})`;
+        statusDiv.innerHTML = ""; // ★ログイン中の名前・メールアドレスの表示を消去
         loginBtn.style.display = "none";
         appContent.style.display = "block";
       } else {
