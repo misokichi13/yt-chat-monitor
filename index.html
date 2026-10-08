@@ -84,10 +84,11 @@
       const appContent = document.getElementById("app-content");
 
       if (user) {
-        statusDiv.style.display = "none";
+        statusDiv.style.display = "none"; // ★枠ごと非表示にする
         loginBtn.style.display = "none";
         appContent.style.display = "block";
       } else {
+        statusDiv.style.display = "block"; // 未ログイン時はメッセージ枠を表示
         statusDiv.innerHTML = "アクセスするにはログインが必要です。";
         loginBtn.style.display = "inline-block";
         appContent.style.display = "none";
