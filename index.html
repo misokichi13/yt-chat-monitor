@@ -9,7 +9,7 @@
     h1 { font-size: 1.2rem; }
     .input-group { margin-bottom: 15px; }
     input { padding: 8px; width: 70%; font-size: 14px; }
-    button { padding: 8px 12px; font-size: 14px; background: #FF0000; color: white; border: none; border-radius: 4px; }
+    button { padding: 8px 12px; font-size: 14px; background: #FF0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
     #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 350px; overflow-y: scroll; border-radius: 4px; }
     .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; }
     .author { font-weight: bold; color: #1a73e8; }
@@ -32,7 +32,7 @@
 
   <script>
     // 1. Firebaseの設定
-     const firebaseConfig = {
+    const firebaseConfig = {
       apiKey: "AIzaSyCKQTbRrjmQICyhLTPVmU9bAvf1ClKTpZA",
       authDomain: "comment-13d0e.firebaseapp.com",
       projectId: "comment-13d0e",
@@ -42,13 +42,12 @@
       measurementId: "G-Y4SLYF4DZ2"
     };
 
-
     // Firebaseの初期化
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
     // 2. YouTube APIキー
-    const YOUTUBE_API_KEY = "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA"
+    const YOUTUBE_API_KEY = "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA";
 
     let nextPageToken = "";
     let intervalId = null;
@@ -70,6 +69,10 @@
 
       alert("チャット取得を開始します！");
       document.getElementById("chat-box").innerHTML = "";
+      nextPageToken = ""; // トークン初期化
+
+      // 最初の1回を実行
+      fetchChatMessages(liveChatId);
 
       // 定期的にコメントを取得 (約5秒間隔)
       if (intervalId) clearInterval(intervalId);
@@ -77,66 +80,6 @@
         fetchChatMessages(liveChatId);
       }, 5000);
     }
-    /// チャットメッセージを取得する関数
-async function fetchChatMessages(liveChatId) {
-  let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
-  if (nextPageToken) {
-    url += `&pageToken=${nextPageToken}`;
-  }
-
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    nextPageToken = data.nextPageToken;
-
-    if (data.items && data.items.length > 0) {
-      for (const item of data.items) {
-        // 画面への表示処理（既存の処理）
-        displayComment(item);
-
-        // ★ここでFirestoreへの保存関数を呼び出す！
-        await saveCommentAndUser(item);
-      }
-    }
-  } catch (error) {
-    console.error("メッセージ取得・保存エラー:", error);
-  }
-}
-
-// コメント1件ごとに保存する関数
-async function saveCommentAndUser(item) {
-  try {
-    const author = item.snippet.authorDetails;
-    // 本文の安全な取得
-    const message = item.snippet.displayMessage || item.snippet.textMessageDetails?.messageText || "";
-    const publishedAt = new Date(item.snippet.publishedAt);
-
-    const userId = author.channelId;
-    const userName = author.displayName;
-    const userIcon = author.profileImageUrl;
-
-    // 1. users コレクションの更新
-    const userRef = db.collection('users').doc(userId);
-    await userRef.set({
-      name: userName,
-      icon: userIcon,
-      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
-      commentCount: firebase.firestore.FieldValue.increment(1)
-    }, { merge: true });
-
-    // 2. comments コレクションの保存
-    const commentId = item.id;
-    const commentRef = db.collection('comments').doc(commentId);
-    await commentRef.set({
-      userId: userId,
-      userName: userName,
-      message: message,
-      createdAt: publishedAt
-    });
-  } catch (err) {
-    console.error("Firestore書き込み失敗:", err);
-  }
-}
 
     // 動画IDから LiveChatID を取得する関数
     async function getLiveChatId(videoId) {
@@ -149,30 +92,77 @@ async function saveCommentAndUser(item) {
       return null;
     }
 
-    // チャットメッセージを取得して表示する関数
+    // チャットメッセージを取得して「画面表示」と「Firestore保存」を行う関数
     async function fetchChatMessages(liveChatId) {
       let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
       if (nextPageToken) {
         url += `&pageToken=${nextPageToken}`;
       }
 
-      const res = await fetch(url);
-      const data = await res.json();
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data.items && data.items.length > 0) {
+          nextPageToken = data.nextPageToken;
 
-      if (data.items) {
-        nextPageToken = data.nextPageToken;
-        const chatBox = document.getElementById("chat-box");
+          for (const item of data.items) {
+            // 1. 画面表示
+            displayComment(item);
 
-        data.items.forEach(item => {
-          const author = item.authorDetails.displayName;
-          const message = item.snippet.displayMessage;
+            // 2. Firestoreへ保存
+            await saveCommentAndUser(item);
+          }
+        }
+      } catch (error) {
+        console.error("メッセージ取得・保存エラー:", error);
+      }
+    }
 
-          const div = document.createElement("div");
-          div.className = "chat-item";
-          div.innerHTML = `<span class="author">${author}:</span> ${message}`;
-          chatBox.appendChild(div);
-          chatBox.scrollTop = chatBox.scrollHeight;
+    // 画面にコメントを追加する関数
+    function displayComment(item) {
+      const author = item.authorDetails.displayName;
+      const message = item.snippet.displayMessage;
+
+      const chatBox = document.getElementById("chat-box");
+      const div = document.createElement("div");
+      div.className = "chat-item";
+      div.innerHTML = `<span class="author">${author}:</span> ${message}`;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // コメント1件ごとにFirestoreに保存する関数
+    async function saveCommentAndUser(item) {
+      try {
+        const author = item.authorDetails;
+        const message = item.snippet.displayMessage || "";
+        const publishedAt = new Date(item.snippet.publishedAt);
+
+        const userId = author.channelId;
+        const userName = author.displayName;
+        const userIcon = author.profileImageUrl;
+
+        // 1. users コレクションの更新（来店記録＋コメント数カウントアップ）
+        const userRef = db.collection('users').doc(userId);
+        await userRef.set({
+          name: userName,
+          icon: userIcon,
+          lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+          commentCount: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
+
+        // 2. comments コレクションの保存（発言ログ）
+        const commentId = item.id;
+        const commentRef = db.collection('comments').doc(commentId);
+        await commentRef.set({
+          userId: userId,
+          userName: userName,
+          message: message,
+          createdAt: publishedAt
         });
+      } catch (err) {
+        console.error("Firestore書き込み失敗:", err);
       }
     }
   </script>
