@@ -6,32 +6,55 @@
   <title>YouTube Chat Monitor</title>
   <style>
     body { font-family: sans-serif; margin: 15px; background: #f5f5f5; color: #333; }
-    h1 { font-size: 1.2rem; }
-    .input-group { margin-bottom: 15px; }
-    input { padding: 8px; width: 70%; font-size: 14px; }
+    h1 { font-size: 1.2rem; margin-bottom: 10px; }
+    .card { background: white; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .input-group { margin-bottom: 10px; }
+    input { padding: 8px; width: 65%; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
     button { padding: 8px 12px; font-size: 14px; background: #FF0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button.sec-btn { background: #1a73e8; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 350px; overflow-y: scroll; border-radius: 4px; }
     .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; }
     .author { font-weight: bold; color: #1a73e8; }
+    .status { font-size: 12px; color: #666; margin-top: 5px; }
+    #app-content { display: none; } /* ログイン前は隠す */
   </style>
 </head>
 <body>
 
   <h1>YouTube Live Chat Monitor</h1>
 
-  <div class="input-group">
-    <input type="text" id="videoId" placeholder="YouTube Liveの動画IDを入力">
-    <button onclick="startMonitoring()">取得開始</button>
+  <!-- ログインエリア -->
+  <div class="card" id="auth-card">
+    <div id="login-status">ログインを確認中...</div>
+    <button id="login-btn" onclick="loginWithGoogle()" style="display:none; background:#4285F4; margin-top:8px;">Googleでログイン</button>
   </div>
 
-  <div id="chat-box"></div>
+  <!-- アプリメインコンテンツ（ログイン後表示） -->
+  <div id="app-content">
+    <div class="card">
+      <div class="input-group">
+        <!-- ワンポチ起動用ボタン -->
+        <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
+      </div>
+      <div class="input-group" style="margin-top: 15px;">
+        <span style="font-size: 12px; color: #666;">または手動で動画IDを指定:</span><br>
+        <input type="text" id="videoId" placeholder="動画ID (例: dQw4w9WgXcQ)">
+        <button onclick="startManualMonitoring()">ID指定で開始</button>
+      </div>
+      <div class="status" id="monitor-status">待機中</div>
+    </div>
+
+    <div id="chat-box"></div>
+  </div>
 
   <!-- Firebase (SDK v9 Compatibility) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
   <script>
-    // 1. Firebaseの設定
+    // 1. 設定情報
     const firebaseConfig = {
       apiKey: "AIzaSyCKQTbRrjmQICyhLTPVmU9bAvf1ClKTpZA",
       authDomain: "comment-13d0e.firebaseapp.com",
@@ -42,46 +65,120 @@
       measurementId: "G-Y4SLYF4DZ2"
     };
 
-    // Firebaseの初期化
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const auth = firebase.auth();
 
-    // 2. YouTube APIキー
     const YOUTUBE_API_KEY = "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA";
+    
+    // ★ご自身のYouTubeチャンネルIDを設定しておくとワンポチ起動が使えます
+    const MY_CHANNEL_ID = "UCwta9DQxsI-A1sVF3SWNHfg"; 
 
     let nextPageToken = "";
     let intervalId = null;
 
-    // チャット取得メイン処理
-    async function startMonitoring() {
+    // 2. ログイン状態の監視
+    auth.onAuthStateChanged(user => {
+      const statusDiv = document.getElementById("login-status");
+      const loginBtn = document.getElementById("login-btn");
+      const appContent = document.getElementById("app-content");
+
+      if (user) {
+        statusDiv.innerHTML = `ログイン中: <strong>${user.displayName}</strong> (${user.email})`;
+        loginBtn.style.display = "none";
+        appContent.style.display = "block";
+      } else {
+        statusDiv.innerHTML = "アクセスするにはログインが必要です。";
+        loginBtn.style.display = "inline-block";
+        appContent.style.display = "none";
+      }
+    });
+
+    // Googleログイン処理
+    function loginWithGoogle() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(error => {
+        alert("ログイン失敗: " + error.message);
+      });
+    }
+
+    // 3. PS5配信向け：チャンネルIDから現在配信中の枠を自動取得して開始
+    async function startAutoMonitoring() {
+      if (!MY_CHANNEL_ID) {
+        const id = prompt("チャンネルIDが未設定です。YouTubeチャンネルIDを入力してください:");
+        if (!id) return;
+        updateStatus("配信を検索中...");
+        const liveVideoId = await getLiveVideoIdFromChannel(id);
+        if (liveVideoId) {
+          document.getElementById("videoId").value = liveVideoId;
+          initMonitoring(liveVideoId);
+        } else {
+          alert("現在ライブ配信中の枠が見つかりませんでした。");
+          updateStatus("待機中");
+        }
+      } else {
+        updateStatus("配信を自動検索中...");
+        const liveVideoId = await getLiveVideoIdFromChannel(MY_CHANNEL_ID);
+        if (liveVideoId) {
+          document.getElementById("videoId").value = liveVideoId;
+          initMonitoring(liveVideoId);
+        } else {
+          alert("現在ライブ配信中の枠が見つかりませんでした。配信が開始されているか確認してください。");
+          updateStatus("待機中");
+        }
+      }
+    }
+
+    // チャンネルIDから現在配信中の動画IDを取得
+    async function getLiveVideoIdFromChannel(channelId) {
+      const url = `https://www.googleapis.com/youtube/v3/search?part=id&channelId=${channelId}&eventType=live&type=video&key=${YOUTUBE_API_KEY}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          return data.items[0].id.videoId;
+        }
+      } catch (e) {
+        console.error("配信検索エラー:", e);
+      }
+      return null;
+    }
+
+    // 手動ID入力時の開始
+    async function startManualMonitoring() {
       const videoId = document.getElementById("videoId").value.trim();
       if (!videoId) {
         alert("動画IDを入力してください");
         return;
       }
+      initMonitoring(videoId);
+    }
 
-      // LiveChatIDを取得
+    // 監視の共通初期化処理
+    async function initMonitoring(videoId) {
+      updateStatus("LiveChatIDを取得中...");
       const liveChatId = await getLiveChatId(videoId);
       if (!liveChatId) {
         alert("ライブチャットを取得できませんでした。配信中か確認してください。");
+        updateStatus("取得失敗");
         return;
       }
 
-      alert("チャット取得を開始します！");
+      updateStatus(`監視中 (動画ID: ${videoId})`);
       document.getElementById("chat-box").innerHTML = "";
-      nextPageToken = ""; // トークン初期化
+      nextPageToken = "";
 
-      // 最初の1回を実行
+      // 初回取得
       fetchChatMessages(liveChatId);
 
-      // 定期的にコメントを取得 (約5秒間隔)
+      // 5秒間隔で定期取得
       if (intervalId) clearInterval(intervalId);
       intervalId = setInterval(() => {
         fetchChatMessages(liveChatId);
       }, 5000);
     }
 
-    // 動画IDから LiveChatID を取得する関数
+    // 動画IDから LiveChatID を取得
     async function getLiveChatId(videoId) {
       const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
       const res = await fetch(url);
@@ -92,7 +189,7 @@
       return null;
     }
 
-    // チャットメッセージを取得して「画面表示」と「Firestore保存」を行う関数
+    // チャット取得＆画面表示＆Firestore保存
     async function fetchChatMessages(liveChatId) {
       let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
       if (nextPageToken) {
@@ -107,10 +204,7 @@
           nextPageToken = data.nextPageToken;
 
           for (const item of data.items) {
-            // 1. 画面表示
             displayComment(item);
-
-            // 2. Firestoreへ保存
             await saveCommentAndUser(item);
           }
         }
@@ -119,7 +213,7 @@
       }
     }
 
-    // 画面にコメントを追加する関数
+    // 画面表示
     function displayComment(item) {
       const author = item.authorDetails.displayName;
       const message = item.snippet.displayMessage;
@@ -132,7 +226,7 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // コメント1件ごとにFirestoreに保存する関数
+    // Firestore保存
     async function saveCommentAndUser(item) {
       try {
         const author = item.authorDetails;
@@ -143,7 +237,7 @@
         const userName = author.displayName;
         const userIcon = author.profileImageUrl;
 
-        // 1. users コレクションの更新（来店記録＋コメント数カウントアップ）
+        // 1. users コレクション更新
         const userRef = db.collection('users').doc(userId);
         await userRef.set({
           name: userName,
@@ -152,7 +246,7 @@
           commentCount: firebase.firestore.FieldValue.increment(1)
         }, { merge: true });
 
-        // 2. comments コレクションの保存（発言ログ）
+        // 2. comments コレクション保存
         const commentId = item.id;
         const commentRef = db.collection('comments').doc(commentId);
         await commentRef.set({
@@ -164,6 +258,10 @@
       } catch (err) {
         console.error("Firestore書き込み失敗:", err);
       }
+    }
+
+    function updateStatus(msg) {
+      document.getElementById("monitor-status").innerText = "ステータス: " + msg;
     }
   </script>
 </body>
