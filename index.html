@@ -77,38 +77,65 @@
         fetchChatMessages(liveChatId);
       }, 5000);
     }
-    // Firebase SDK（Firestore）が初期化されている前提のコード例です
+    /// チャットメッセージを取得する関数
+async function fetchChatMessages(liveChatId) {
+  let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
+  if (nextPageToken) {
+    url += `&pageToken=${nextPageToken}`;
+  }
 
-    // コメント1件ごとに処理
-    async function saveCommentAndUser(item) {
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    nextPageToken = data.nextPageToken;
+
+    if (data.items && data.items.length > 0) {
+      for (const item of data.items) {
+        // 画面への表示処理（既存の処理）
+        displayComment(item);
+
+        // ★ここでFirestoreへの保存関数を呼び出す！
+        await saveCommentAndUser(item);
+      }
+    }
+  } catch (error) {
+    console.error("メッセージ取得・保存エラー:", error);
+  }
+}
+
+// コメント1件ごとに保存する関数
+async function saveCommentAndUser(item) {
+  try {
     const author = item.snippet.authorDetails;
-    const message = item.snippet.displayMessageDetails ? item.snippet.displayMessageDetails.textMessageDetails.messageText : item.snippet.textMessageDetails.messageText;
+    // 本文の安全な取得
+    const message = item.snippet.displayMessage || item.snippet.textMessageDetails?.messageText || "";
     const publishedAt = new Date(item.snippet.publishedAt);
 
-    const userId = author.channelId; // ユーザー固有のチャンネルID
+    const userId = author.channelId;
     const userName = author.displayName;
     const userIcon = author.profileImageUrl;
 
-    // 1. users コレクションの更新（ドキュメントが存在しなければ作成、あれば更新）
+    // 1. users コレクションの更新
     const userRef = db.collection('users').doc(userId);
-  
     await userRef.set({
       name: userName,
       icon: userIcon,
-      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(), // 最終来店日
-      commentCount: firebase.firestore.FieldValue.increment(1)     // コメント数を+1
-    }, { merge: true }); // merge: true で既存データ（初来店日など）を消さずに更新
+      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+      commentCount: firebase.firestore.FieldValue.increment(1)
+    }, { merge: true });
 
-  // 2. comments コレクションに保存（重複防止のためメッセージIDをDocument IDにする）
-  const commentId = item.id;
-  const commentRef = db.collection('comments').doc(commentId);
-
-  await commentRef.set({
-    userId: userId,
-    userName: userName,
-    message: message,
-    createdAt: publishedAt
-  });
+    // 2. comments コレクションの保存
+    const commentId = item.id;
+    const commentRef = db.collection('comments').doc(commentId);
+    await commentRef.set({
+      userId: userId,
+      userName: userName,
+      message: message,
+      createdAt: publishedAt
+    });
+  } catch (err) {
+    console.error("Firestore書き込み失敗:", err);
+  }
 }
 
     // 動画IDから LiveChatID を取得する関数
