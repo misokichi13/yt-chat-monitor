@@ -77,6 +77,39 @@
         fetchChatMessages(liveChatId);
       }, 5000);
     }
+    // Firebase SDK（Firestore）が初期化されている前提のコード例です
+
+    // コメント1件ごとに処理
+    async function saveCommentAndUser(item) {
+    const author = item.snippet.authorDetails;
+    const message = item.snippet.displayMessageDetails ? item.snippet.displayMessageDetails.textMessageDetails.messageText : item.snippet.textMessageDetails.messageText;
+    const publishedAt = new Date(item.snippet.publishedAt);
+
+    const userId = author.channelId; // ユーザー固有のチャンネルID
+    const userName = author.displayName;
+    const userIcon = author.profileImageUrl;
+
+    // 1. users コレクションの更新（ドキュメントが存在しなければ作成、あれば更新）
+    const userRef = db.collection('users').doc(userId);
+  
+    await userRef.set({
+      name: userName,
+      icon: userIcon,
+      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(), // 最終来店日
+      commentCount: firebase.firestore.FieldValue.increment(1)     // コメント数を+1
+    }, { merge: true }); // merge: true で既存データ（初来店日など）を消さずに更新
+
+  // 2. comments コレクションに保存（重複防止のためメッセージIDをDocument IDにする）
+  const commentId = item.id;
+  const commentRef = db.collection('comments').doc(commentId);
+
+  await commentRef.set({
+    userId: userId,
+    userName: userName,
+    message: message,
+    createdAt: publishedAt
+  });
+}
 
     // 動画IDから LiveChatID を取得する関数
     async function getLiveChatId(videoId) {
