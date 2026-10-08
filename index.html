@@ -79,17 +79,17 @@
 
     // 2. ログイン状態の監視
     auth.onAuthStateChanged(user => {
-      const statusDiv = document.getElementById("login-status");
+      const authCard = document.getElementById("auth-card"); // 外枠カードを取得
+      const loginStatus = document.getElementById("login-status");
       const loginBtn = document.getElementById("login-btn");
       const appContent = document.getElementById("app-content");
 
       if (user) {
-        statusDiv.style.display = "none"; // ★枠ごと非表示にする
-        loginBtn.style.display = "none";
+        authCard.style.display = "none"; // ★枠ごと丸ごと隠す！
         appContent.style.display = "block";
       } else {
-        statusDiv.style.display = "block"; // 未ログイン時はメッセージ枠を表示
-        statusDiv.innerHTML = "アクセスするにはログインが必要です。";
+        authCard.style.display = "block"; // 未ログイン時は枠を表示
+        loginStatus.innerHTML = "アクセスするにはログインが必要です。";
         loginBtn.style.display = "inline-block";
         appContent.style.display = "none";
       }
