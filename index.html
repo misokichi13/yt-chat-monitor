@@ -7,15 +7,28 @@
     h1 { font-size: 1.2rem; margin-bottom: 10px; }
     .card { background: white; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
     .input-group { margin-bottom: 10px; }
-    input { padding: 8px; width: 65%; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+    input, textarea { padding: 8px; width: 100%; box-sizing: border-box; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
+    input[type="text"].short-input { width: 65%; }
     button { padding: 8px 12px; font-size: 14px; background: #FF0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.sec-btn { background: #1a73e8; }
+    button.gray-btn { background: #666; }
     button:disabled { background: #ccc; cursor: not-allowed; }
-    #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 350px; overflow-y: scroll; border-radius: 4px; }
+    #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; border-radius: 4px; margin-bottom: 15px; }
     .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; }
-    .author { font-weight: bold; color: #1a73e8; }
+    .author { font-weight: bold; color: #1a73e8; cursor: pointer; text-decoration: underline; }
     .status { font-size: 12px; color: #666; margin-top: 5px; }
-    #app-content { display: none; } /* ログイン前は隠す */
+    #app-content { display: none; }
+
+    /* モーダル（ポップアップ）のスタイル */
+    #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .modal-header { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; }
+    .field-label { font-size: 12px; color: #666; margin-top: 10px; display: block; }
+
+    /* リスナー一覧のスタイル */
+    .listener-card { background: #fff; border: 1px solid #ddd; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
+    .listener-info { flex-grow: 1; margin-left: 10px; }
+    .listener-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
   </style></head><body>
 
   <h1>YouTube Live Chat Monitor</h1>
@@ -30,18 +43,45 @@
   <div id="app-content">
     <div class="card">
       <div class="input-group">
-        <!-- ワンポチ起動用ボタン -->
         <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
       </div>
       <div class="input-group" style="margin-top: 15px;">
         <span style="font-size: 12px; color: #666;">または手動で動画IDを指定:</span><br>
-        <input type="text" id="videoId" placeholder="動画ID (例: dQw4w9WgXcQ)">
+        <input type="text" id="videoId" class="short-input" placeholder="動画ID (例: dQw4w9WgXcQ)">
         <button onclick="startManualMonitoring()">ID指定で開始</button>
       </div>
       <div class="status" id="monitor-status">待機中</div>
     </div>
 
     <div id="chat-box"></div>
+
+    <!-- リスナー一覧を開くボタン -->
+    <div class="card">
+      <button onclick="toggleListenerList()" class="gray-btn" style="width: 100%;">リスナー一覧・管理を開く/閉じる</button>
+      <div id="listener-list-container" style="display: none; margin-top: 15px;">
+        <h3 style="font-size: 1rem; margin-bottom: 10px;">登録済みリスナー一覧</h3>
+        <div id="listener-cards-area">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編集モーダル（ポップアップ） -->
+  <div id="edit-modal">
+    <div class="modal-content">
+      <div class="modal-header" id="modal-user-name">ユーザー情報編集</div>
+      <input type="hidden" id="modal-user-id">
+      
+      <label class="field-label">フリガナ (reading)</label>
+      <input type="text" id="modal-reading" placeholder="例: リスナーメイ">
+
+      <label class="field-label">自分用メモ (memo)</label>
+      <textarea id="modal-memo" rows="3" placeholder="例: 雑談好き、〇〇の話題に反応する"></textarea>
+
+      <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 8px;">
+        <button onclick="closeModal()" class="gray-btn">キャンセル</button>
+        <button onclick="saveUserMemo()" class="sec-btn">保存する</button>
+      </div>
+    </div>
   </div>
 
   <!-- Firebase (SDK v9 Compatibility) -->
@@ -50,7 +90,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
   <script>
-    // 1. 設定情報
     const firebaseConfig = {
       apiKey: "AIzaSyCKQTbRrjmQICyhLTPVmU9bAvf1ClKTpZA",
       authDomain: "comment-13d0e.firebaseapp.com",
@@ -66,39 +105,28 @@
     const auth = firebase.auth();
 
     const YOUTUBE_API_KEY = "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA";
-    
-    // ご自身のYouTubeチャンネルID
     const MY_CHANNEL_ID = "UCwta9DQxsI-A1sVF3SWNHfg"; 
 
     let nextPageToken = "";
     let intervalId = null;
-
-    // 画面消灯防止用（Wake Lock API）変数
     let wakeLock = null;
 
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
         try {
           wakeLock = await navigator.wakeLock.request('screen');
-          console.log('画面の自動消灯を無効化しました');
-
-          wakeLock.addEventListener('release', () => {
-            console.log('画面の自動消灯ロックが解除されました');
-          });
         } catch (err) {
           console.error(`${err.name}, ${err.message}`);
         }
       }
     }
 
-    // タブが裏に隠れたり、画面が戻ってきたときの再取得処理
     document.addEventListener('visibilitychange', async () => {
       if (wakeLock !== null && document.visibilityState === 'visible') {
         requestWakeLock();
       }
     });
 
-    // 2. ログイン状態の監視
     auth.onAuthStateChanged(user => {
       const authCard = document.getElementById("auth-card");
       const loginStatus = document.getElementById("login-status");
@@ -116,7 +144,6 @@
       }
     });
 
-    // Googleログイン処理
     function loginWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
       auth.signInWithPopup(provider).catch(error => {
@@ -124,34 +151,29 @@
       });
     }
 
-    // 3. PS5配信向け：チャンネルIDから現在配信中の枠を自動取得して開始
     async function startAutoMonitoring() {
-      if (!MY_CHANNEL_ID) {
-        const id = prompt("チャンネルIDが未設定です。YouTubeチャンネルIDを入力してください:");
+      const targetId = MY_CHANNEL_ID;
+      if (!targetId) {
+        const id = prompt("チャンネルIDを入力してください:");
         if (!id) return;
-        updateStatus("配信を検索中...");
-        const liveVideoId = await getLiveVideoIdFromChannel(id);
-        if (liveVideoId) {
-          document.getElementById("videoId").value = liveVideoId;
-          initMonitoring(liveVideoId);
-        } else {
-          alert("現在ライブ配信中の枠が見つかりませんでした。");
-          updateStatus("待機中");
-        }
+        runMonitoringById(id);
       } else {
-        updateStatus("配信を自動検索中...");
-        const liveVideoId = await getLiveVideoIdFromChannel(MY_CHANNEL_ID);
-        if (liveVideoId) {
-          document.getElementById("videoId").value = liveVideoId;
-          initMonitoring(liveVideoId);
-        } else {
-          alert("現在ライブ配信中の枠が見つかりませんでした。配信が開始されているか確認してください。");
-          updateStatus("待機中");
-        }
+        runMonitoringById(targetId);
       }
     }
 
-    // チャンネルIDから現在配信中の動画IDを取得
+    async function runMonitoringById(channelId) {
+      updateStatus("配信を自動検索中...");
+      const liveVideoId = await getLiveVideoIdFromChannel(channelId);
+      if (liveVideoId) {
+        document.getElementById("videoId").value = liveVideoId;
+        initMonitoring(liveVideoId);
+      } else {
+        alert("現在ライブ配信中の枠が見つかりませんでした。");
+        updateStatus("待機中");
+      }
+    }
+
     async function getLiveVideoIdFromChannel(channelId) {
       const url = `https://www.googleapis.com/youtube/v3/search?part=id&channelId=${channelId}&eventType=live&type=video&key=${YOUTUBE_API_KEY}`;
       try {
@@ -166,7 +188,6 @@
       return null;
     }
 
-    // 手動ID入力時の開始
     async function startManualMonitoring() {
       const videoId = document.getElementById("videoId").value.trim();
       if (!videoId) {
@@ -176,11 +197,8 @@
       initMonitoring(videoId);
     }
 
-    // 監視の共通初期化処理（ここに画面消灯防止を連動させました）
     async function initMonitoring(videoId) {
-      // ユーザーがボタンを押したタイミングで画面消灯防止をリクエスト
       requestWakeLock();
-
       updateStatus("LiveChatIDを取得中...");
       const liveChatId = await getLiveChatId(videoId);
       if (!liveChatId) {
@@ -193,17 +211,14 @@
       document.getElementById("chat-box").innerHTML = "";
       nextPageToken = "";
 
-      // 初回取得（videoIdも渡す）
       fetchChatMessages(liveChatId, videoId);
 
-      // 5秒間隔で定期取得
       if (intervalId) clearInterval(intervalId);
       intervalId = setInterval(() => {
         fetchChatMessages(liveChatId, videoId);
       }, 5000);
     }
 
-    // 動画IDから LiveChatID を取得
     async function getLiveChatId(videoId) {
       const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
       const res = await fetch(url);
@@ -214,7 +229,6 @@
       return null;
     }
 
-    // チャット取得＆画面表示＆Firestore保存
     async function fetchChatMessages(liveChatId, videoId) {
       let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
       if (nextPageToken) {
@@ -238,20 +252,33 @@
       }
     }
 
-    // 画面表示
+    // チャット画面表示（名前をクリックすると編集モーダルが開く仕様）
     function displayComment(item) {
       const author = item.authorDetails.displayName;
+      const userId = item.authorDetails.channelId;
       const message = item.snippet.displayMessage;
 
       const chatBox = document.getElementById("chat-box");
       const div = document.createElement("div");
       div.className = "chat-item";
-      div.innerHTML = `<span class="author">${author}:</span> ${message}`;
+      // 名前の部分をクリックすると openModal が走る
+      div.innerHTML = `<span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}:</span> ${escapeHtml(message)}`;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Firestore保存（来訪回数・重複防止・新フィールド対応版）
+    // HTMLエスケープ用簡易関数
+    function escapeHtml(str) {
+      return str.replace(/[&'`<>"]/g, match => ({
+        '&': '&amp;',
+        "'": '&#x27;',
+        '`': '&#x60;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+      }[match]));
+    }
+
     async function saveCommentAndUser(item, videoId) {
       try {
         const author = item.authorDetails;
@@ -262,7 +289,6 @@
         const userName = author.displayName;
         const userIcon = author.profileImageUrl;
 
-        // 1. users コレクション更新と来訪回数（visitCount）の判定
         const userRef = db.collection('users').doc(userId);
         const userDoc = await userRef.get();
 
@@ -274,14 +300,12 @@
         };
 
         if (!userDoc.exists) {
-          // 初めてのユーザーの場合
           updateData.firstSeenAt = firebase.firestore.FieldValue.serverTimestamp();
           updateData.visitCount = 1;
           updateData.visitedVideos = [videoId];
-          updateData.reading = ""; // フリガナ（初期値）
-          updateData.memo = "";    // メモ（初期値）
+          updateData.reading = "";
+          updateData.memo = "";
         } else {
-          // 既存ユーザーの場合：今回の配信（videoId）がまだ記録されていなければ来訪回数を増やす
           const data = userDoc.data();
           const visitedVideos = data.visitedVideos || [];
 
@@ -293,7 +317,6 @@
 
         await userRef.set(updateData, { merge: true });
 
-        // 2. comments コレクション保存（videoIdも記録）
         const commentId = item.id;
         const commentRef = db.collection('comments').doc(commentId);
         await commentRef.set({
@@ -305,6 +328,112 @@
         });
       } catch (err) {
         console.error("Firestore書き込み失敗:", err);
+      }
+    }
+
+    // --- モーダル（編集画面）の制御 ---
+    async function openModal(userId, userName) {
+      document.getElementById("modal-user-id").value = userId;
+      document.getElementById("modal-user-name").innerText = userName + " の編集";
+      document.getElementById("modal-reading").value = "";
+      document.getElementById("modal-memo").value = "";
+
+      // Firestoreから最新のフリガナとメモを読み込む
+      try {
+        const doc = await db.collection('users').doc(userId).get();
+        if (doc.exists) {
+          const data = doc.data();
+          document.getElementById("modal-reading").value = data.reading || "";
+          document.getElementById("modal-memo").value = data.memo || "";
+        }
+      } catch (e) {
+        console.error("ユーザー情報取得失敗:", e);
+      }
+
+      document.getElementById("edit-modal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("edit-modal").style.display = "none";
+    }
+
+    async function saveUserMemo() {
+      const userId = document.getElementById("modal-user-id").value;
+      const reading = document.getElementById("modal-reading").value;
+      const memo = document.getElementById("modal-memo").value;
+
+      if (!userId) return;
+
+      try {
+        await db.collection('users').doc(userId).update({
+          reading: reading,
+          memo: memo
+        });
+        alert("保存しました！");
+        closeModal();
+        
+        // もし一覧が開いていれば一覧も再読み込みする
+        if (document.getElementById("listener-list-container").style.display === "block") {
+          loadListenerList();
+        }
+      } catch (e) {
+        console.error("保存失敗:", e);
+        alert("保存に失敗しました: " + e.message);
+      }
+    }
+
+    // --- リスナー一覧の開閉・読み込み ---
+    function toggleListenerList() {
+      const container = document.getElementById("listener-list-container");
+      if (container.style.display === "none") {
+        container.style.display = "block";
+        loadListenerList();
+      } else {
+        container.style.display = "none";
+      }
+    }
+
+    async function loadListenerList() {
+      const area = document.getElementById("listener-cards-area");
+      area.innerHTML = "読み込み中...";
+
+      try {
+        // lastSeenAtが新しい順に取得（最大50件など）
+        const snapshot = await db.collection('users').orderBy('lastSeenAt', 'desc').limit(50).get();
+        
+        if (snapshot.empty) {
+          area.innerHTML = "まだリスナーデータがありません。";
+          return;
+        }
+
+        let html = "";
+        snapshot.forEach(doc => {
+          const u = doc.data();
+          const userId = doc.id;
+          const name = u.name || "名無し";
+          const reading = u.reading ? `(${u.reading})` : "";
+          const icon = u.icon || "https://via.placeholder.com/36";
+          const visitCount = u.visitCount || 0;
+          const commentCount = u.commentCount || 0;
+          const memo = u.memo || "メモなし";
+
+          html += `
+            <div class="listener-card">
+              <img src="${icon}" class="listener-avatar" alt="">
+              <div class="listener-info">
+                <div style="font-weight: bold;">${escapeHtml(name)} <span style="font-weight: normal; color: #666; font-size: 11px;">${escapeHtml(reading)}</span></div>
+                <div style="color: #444; font-size: 12px; margin-top: 2px;">メモ: ${escapeHtml(memo)}</div>
+                <div style="color: #888; font-size: 11px; margin-top: 2px;">来訪: ${visitCount}回 / コメント: ${commentCount}回</div>
+              </div>
+              <button onclick="openModal('${userId}', '${escapeHtml(name).replace(/'/g, "\\'")}')" class="sec-btn" style="padding: 4px 8px; font-size: 12px;">編集</button>
+            </div>
+          `;
+        });
+
+        area.innerHTML = html;
+      } catch (e) {
+        console.error("リスナー一覧取得エラー:", e);
+        area.innerHTML = "一覧の取得に失敗しました。";
       }
     }
 
