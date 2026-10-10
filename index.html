@@ -1,6 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
+<!DOCTYPE html><html lang="ja"><head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube Chat Monitor</title>
@@ -18,9 +16,7 @@
     .author { font-weight: bold; color: #1a73e8; }
     .status { font-size: 12px; color: #666; margin-top: 5px; }
     #app-content { display: none; } /* ログイン前は隠す */
-  </style>
-</head>
-<body>
+  </style></head><body>
 
   <h1>YouTube Live Chat Monitor</h1>
 
@@ -71,7 +67,7 @@
 
     const YOUTUBE_API_KEY = "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA";
     
-    // ★ご自身のYouTubeチャンネルIDを設定しておくとワンポチ起動が使えます
+    // ご自身のYouTubeチャンネルID
     const MY_CHANNEL_ID = "UCwta9DQxsI-A1sVF3SWNHfg"; 
 
     let nextPageToken = "";
@@ -79,16 +75,16 @@
 
     // 2. ログイン状態の監視
     auth.onAuthStateChanged(user => {
-      const authCard = document.getElementById("auth-card"); // 外枠カードを取得
+      const authCard = document.getElementById("auth-card");
       const loginStatus = document.getElementById("login-status");
       const loginBtn = document.getElementById("login-btn");
       const appContent = document.getElementById("app-content");
 
       if (user) {
-        authCard.style.display = "none"; // ★枠ごと丸ごと隠す！
+        authCard.style.display = "none";
         appContent.style.display = "block";
       } else {
-        authCard.style.display = "block"; // 未ログイン時は枠を表示
+        authCard.style.display = "block";
         loginStatus.innerHTML = "アクセスするにはログインが必要です。";
         loginBtn.style.display = "inline-block";
         appContent.style.display = "none";
@@ -169,13 +165,13 @@
       document.getElementById("chat-box").innerHTML = "";
       nextPageToken = "";
 
-      // 初回取得
-      fetchChatMessages(liveChatId);
+      // 初回取得（videoIdも渡す）
+      fetchChatMessages(liveChatId, videoId);
 
       // 5秒間隔で定期取得
       if (intervalId) clearInterval(intervalId);
       intervalId = setInterval(() => {
-        fetchChatMessages(liveChatId);
+        fetchChatMessages(liveChatId, videoId);
       }, 5000);
     }
 
@@ -191,7 +187,7 @@
     }
 
     // チャット取得＆画面表示＆Firestore保存
-    async function fetchChatMessages(liveChatId) {
+    async function fetchChatMessages(liveChatId, videoId) {
       let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
       if (nextPageToken) {
         url += `&pageToken=${nextPageToken}`;
@@ -206,7 +202,7 @@
 
           for (const item of data.items) {
             displayComment(item);
-            await saveCommentAndUser(item);
+            await saveCommentAndUser(item, videoId);
           }
         }
       } catch (error) {
@@ -227,8 +223,8 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Firestore保存
-    async function saveCommentAndUser(item) {
+    // Firestore保存（来訪回数・重複防止・新フィールド対応版）
+    async function saveCommentAndUser(item, videoId) {
       try {
         const author = item.authorDetails;
         const message = item.snippet.displayMessage || "";
@@ -238,23 +234,46 @@
         const userName = author.displayName;
         const userIcon = author.profileImageUrl;
 
-        // 1. users コレクション更新
+        // 1. users コレクション更新と来訪回数（visitCount）の判定
         const userRef = db.collection('users').doc(userId);
-        await userRef.set({
+        const userDoc = await userRef.get();
+
+        let updateData = {
           name: userName,
           icon: userIcon,
           lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
           commentCount: firebase.firestore.FieldValue.increment(1)
-        }, { merge: true });
+        };
 
-        // 2. comments コレクション保存
+        if (!userDoc.exists) {
+          // 初めてのユーザーの場合
+          updateData.firstSeenAt = firebase.firestore.FieldValue.serverTimestamp();
+          updateData.visitCount = 1;
+          updateData.visitedVideos = [videoId];
+          updateData.reading = ""; // フリガナ（初期値）
+          updateData.memo = "";    // メモ（初期値）
+        } else {
+          // 既存ユーザーの場合：今回の配信（videoId）がまだ記録されていなければ来訪回数を増やす
+          const data = userDoc.data();
+          const visitedVideos = data.visitedVideos || [];
+
+          if (!visitedVideos.includes(videoId)) {
+            updateData.visitCount = firebase.firestore.FieldValue.increment(1);
+            updateData.visitedVideos = firebase.firestore.FieldValue.arrayUnion(videoId);
+          }
+        }
+
+        await userRef.set(updateData, { merge: true });
+
+        // 2. comments コレクション保存（videoIdも記録）
         const commentId = item.id;
         const commentRef = db.collection('comments').doc(commentId);
         await commentRef.set({
           userId: userId,
           userName: userName,
           message: message,
-          createdAt: publishedAt
+          createdAt: publishedAt,
+          videoId: videoId
         });
       } catch (err) {
         console.error("Firestore書き込み失敗:", err);
@@ -264,6 +283,4 @@
     function updateStatus(msg) {
       document.getElementById("monitor-status").innerText = "ステータス: " + msg;
     }
-  </script>
-</body>
-</html>
+  </script></body></html>
