@@ -73,6 +73,31 @@
     let nextPageToken = "";
     let intervalId = null;
 
+    // 画面消灯防止用（Wake Lock API）変数
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('画面の自動消灯を無効化しました');
+
+          wakeLock.addEventListener('release', () => {
+            console.log('画面の自動消灯ロックが解除されました');
+          });
+        } catch (err) {
+          console.error(`${err.name}, ${err.message}`);
+        }
+      }
+    }
+
+    // タブが裏に隠れたり、画面が戻ってきたときの再取得処理
+    document.addEventListener('visibilitychange', async () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    });
+
     // 2. ログイン状態の監視
     auth.onAuthStateChanged(user => {
       const authCard = document.getElementById("auth-card");
@@ -151,8 +176,11 @@
       initMonitoring(videoId);
     }
 
-    // 監視の共通初期化処理
+    // 監視の共通初期化処理（ここに画面消灯防止を連動させました）
     async function initMonitoring(videoId) {
+      // ユーザーがボタンを押したタイミングで画面消灯防止をリクエスト
+      requestWakeLock();
+
       updateStatus("LiveChatIDを取得中...");
       const liveChatId = await getLiveChatId(videoId);
       if (!liveChatId) {
