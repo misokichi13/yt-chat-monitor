@@ -12,6 +12,7 @@
     button { padding: 8px 12px; font-size: 14px; background: #FF0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.sec-btn { background: #1a73e8; }
     button.gray-btn { background: #666; }
+    button.add-btn { background: #28a745; }
     button:disabled { background: #ccc; cursor: not-allowed; }
     #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; border-radius: 4px; margin-bottom: 15px; }
     .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; }
@@ -19,7 +20,7 @@
     .status { font-size: 12px; color: #666; margin-top: 5px; }
     #app-content { display: none; }
 
-    /* モーダル（ポップアップ）のスタイル */
+    /* モーダル（編集画面）のスタイル */
     #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
     .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     .modal-header { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; }
@@ -29,6 +30,7 @@
     .listener-card { background: #fff; border: 1px solid #ddd; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
     .listener-info { flex-grow: 1; margin-left: 10px; }
     .listener-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+    .add-form-box { background: #eef5ff; border: 1px solid #b8d5ff; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
   </style></head><body>
 
   <h1>YouTube Live Chat Monitor</h1>
@@ -46,8 +48,8 @@
         <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
       </div>
       <div class="input-group" style="margin-top: 15px;">
-        <span style="font-size: 12px; color: #666;">または手動で動画IDを指定:</span><br>
-        <input type="text" id="videoId" class="short-input" placeholder="動画ID (例: dQw4w9WgXcQ)">
+        <span style="font-size: 12px; color: #666;">または手動で動画ID・URLを指定:</span><br>
+        <input type="text" id="videoId" class="short-input" placeholder="動画IDまたはURL">
         <button onclick="startManualMonitoring()">ID指定で開始</button>
       </div>
       <div class="status" id="monitor-status">待機中</div>
@@ -55,10 +57,37 @@
 
     <div id="chat-box"></div>
 
-    <!-- リスナー一覧を開くボタン -->
+    <!-- リスナー一覧＆手動追加エリア -->
     <div class="card">
       <button onclick="toggleListenerList()" class="gray-btn" style="width: 100%;">リスナー一覧・管理を開く/閉じる</button>
       <div id="listener-list-container" style="display: none; margin-top: 15px;">
+        
+        <!-- 手動追加フォーム -->
+        <div class="add-form-box">
+          <h4 style="margin: 0 0 8px 0; font-size: 0.95rem; color: #1a73e8;">＋ 過去のリスナーを手動で登録</h4>
+          <label class="field-label" style="margin-top:0;">名前 (ユーザー名) *必須</label>
+          <input type="text" id="add-name" placeholder="例: 常連さん">
+
+          <label class="field-label">フリガナ (reading)</label>
+          <input type="text" id="add-reading" placeholder="例: ジョウレンサン">
+
+          <label class="field-label">自分用メモ (memo)</label>
+          <textarea id="add-memo" rows="2" placeholder="例: アーカイブコメント常連、〇〇の話題で盛り上がる"></textarea>
+
+          <div style="display: flex; gap: 10px; margin-top: 8px;">
+            <div style="flex:1;">
+              <label class="field-label" style="margin-top:0;">来訪回数</label>
+              <input type="number" id="add-visit" value="1" min="1">
+            </div>
+            <div style="flex:1;">
+              <label class="field-label" style="margin-top:0;">コメント数</label>
+              <input type="number" id="add-comment" value="1" min="1">
+            </div>
+          </div>
+
+          <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 12px;">登録する</button>
+        </div>
+
         <h3 style="font-size: 1rem; margin-bottom: 10px;">登録済みリスナー一覧</h3>
         <div id="listener-cards-area">読み込み中...</div>
       </div>
@@ -189,11 +218,27 @@
     }
 
     async function startManualMonitoring() {
-      const videoId = document.getElementById("videoId").value.trim();
-      if (!videoId) {
-        alert("動画IDを入力してください");
+      let inputVal = document.getElementById("videoId").value.trim();
+      if (!inputVal) {
+        alert("動画IDまたはURLを入力してください");
         return;
       }
+
+      let videoId = inputVal;
+      if (inputVal.includes("youtu.be/")) {
+        videoId = inputVal.split("youtu.be/")[1]?.split("?")[0];
+      } else if (inputVal.includes("watch?v=")) {
+        videoId = inputVal.split("watch?v=")[1]?.split("&")[0];
+      } else if (inputVal.includes("/live/")) {
+        videoId = inputVal.split("/live/")[1]?.split("?")[0];
+      }
+
+      if (!videoId) {
+        alert("有効な動画IDまたはURLが見つかりませんでした。");
+        return;
+      }
+
+      document.getElementById("videoId").value = videoId;
       initMonitoring(videoId);
     }
 
@@ -252,7 +297,6 @@
       }
     }
 
-    // チャット画面表示（名前をクリックすると編集モーダルが開く仕様）
     function displayComment(item) {
       const author = item.authorDetails.displayName;
       const userId = item.authorDetails.channelId;
@@ -261,13 +305,11 @@
       const chatBox = document.getElementById("chat-box");
       const div = document.createElement("div");
       div.className = "chat-item";
-      // 名前の部分をクリックすると openModal が走る
       div.innerHTML = `<span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}:</span> ${escapeHtml(message)}`;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // HTMLエスケープ用簡易関数
     function escapeHtml(str) {
       return str.replace(/[&'`<>"]/g, match => ({
         '&': '&amp;',
@@ -331,6 +373,52 @@
       }
     }
 
+    // --- 手動リスナー追加機能 ---
+    async function addManualUser() {
+      const name = document.getElementById("add-name").value.trim();
+      const reading = document.getElementById("add-reading").value.trim();
+      const memo = document.getElementById("add-memo").value.trim();
+      const visitCount = parseInt(document.getElementById("add-visit").value) || 1;
+      const commentCount = parseInt(document.getElementById("add-comment").value) || 1;
+
+      if (!name) {
+        alert("名前を入力してください。");
+        return;
+      }
+
+      // ドキュメントID用に一意なキーを作成（manual_タイムスタンプ）
+      const manualUserId = "manual_" + Date.now();
+
+      try {
+        await db.collection('users').doc(manualUserId).set({
+          name: name,
+          reading: reading,
+          memo: memo,
+          visitCount: visitCount,
+          commentCount: commentCount,
+          icon: "", // 手動追加時は空欄アイコン
+          firstSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+          visitedVideos: []
+        });
+
+        alert(`${name} さんを登録しました！`);
+        
+        // フォームリセット
+        document.getElementById("add-name").value = "";
+        document.getElementById("add-reading").value = "";
+        document.getElementById("add-memo").value = "";
+        document.getElementById("add-visit").value = "1";
+        document.getElementById("add-comment").value = "1";
+
+        // 一覧を再読み込み
+        loadListenerList();
+      } catch (e) {
+        console.error("手動登録エラー:", e);
+        alert("登録に失敗しました: " + e.message);
+      }
+    }
+
     // --- モーダル（編集画面）の制御 ---
     async function openModal(userId, userName) {
       document.getElementById("modal-user-id").value = userId;
@@ -338,7 +426,6 @@
       document.getElementById("modal-reading").value = "";
       document.getElementById("modal-memo").value = "";
 
-      // Firestoreから最新のフリガナとメモを読み込む
       try {
         const doc = await db.collection('users').doc(userId).get();
         if (doc.exists) {
@@ -372,7 +459,6 @@
         alert("保存しました！");
         closeModal();
         
-        // もし一覧が開いていれば一覧も再読み込みする
         if (document.getElementById("listener-list-container").style.display === "block") {
           loadListenerList();
         }
@@ -398,7 +484,6 @@
       area.innerHTML = "読み込み中...";
 
       try {
-        // lastSeenAtが新しい順に取得（最大50件など）
         const snapshot = await db.collection('users').orderBy('lastSeenAt', 'desc').limit(50).get();
         
         if (snapshot.empty) {
