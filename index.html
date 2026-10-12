@@ -14,9 +14,17 @@
     button.gray-btn { background: #666; }
     button.add-btn { background: #28a745; }
     button:disabled { background: #ccc; cursor: not-allowed; }
+    
+    /* 現在時刻の大きな表示エリア */
+    .clock-display { background: #1a73e8; color: white; padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px; }
+    #current-time { font-size: 2rem; font-weight: bold; letter-spacing: 1px; }
+    #current-date { font-size: 0.85rem; opacity: 0.9; }
+
     #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; border-radius: 4px; margin-bottom: 15px; }
-    .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; }
+    .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .chat-main { flex-grow: 1; }
     .author { font-weight: bold; color: #1a73e8; cursor: pointer; text-decoration: underline; }
+    .time-ago { font-size: 11px; color: #888; white-space: nowrap; margin-left: 8px; }
     .status { font-size: 12px; color: #666; margin-top: 5px; }
     #app-content { display: none; }
 
@@ -43,6 +51,13 @@
 
   <!-- アプリメインコンテンツ（ログイン後表示） -->
   <div id="app-content">
+    
+    <!-- 現在時刻の大きな表示枠 -->
+    <div class="clock-display">
+      <div id="current-date">----/--/-- (-)</div>
+      <div id="current-time">00:00:00</div>
+    </div>
+
     <div class="card">
       <div class="input-group">
         <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
@@ -139,6 +154,25 @@
     let nextPageToken = "";
     let intervalId = null;
     let wakeLock = null;
+
+    // --- リアルタイム時計の更新（毎秒） ---
+    function updateClock() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      const week = daysOfWeek[now.getDay()];
+
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+
+      document.getElementById("current-date").innerText = `${year}/${month}/${day} (${week})`;
+      document.getElementById("current-time").innerText = `${hours}:${minutes}:${seconds}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock(); // 初回実行
 
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
@@ -297,18 +331,52 @@
       }
     }
 
+    // チャット表示（〇分前などの相対時間を計算して埋め込む）
     function displayComment(item) {
       const author = item.authorDetails.displayName;
       const userId = item.authorDetails.channelId;
       const message = item.snippet.displayMessage;
+      const publishedAt = new Date(item.snippet.publishedAt);
 
       const chatBox = document.getElementById("chat-box");
       const div = document.createElement("div");
       div.className = "chat-item";
-      div.innerHTML = `<span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}:</span> ${escapeHtml(message)}`;
+      
+      // 投稿時間の相対表示を計算する関数
+      const timeAgoText = getTimeAgo(publishedAt);
+
+      div.innerHTML = `
+        <div class="chat-main">
+          <span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}:</span> ${escapeHtml(message)}
+        </div>
+        <div class="time-ago" data-time="${publishedAt.getTime()}">${timeAgoText}</div>
+      `;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
+
+    // 相対時間を計算するヘルパー関数
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      if (seconds < 10) return "たった今";
+      if (seconds < 60) return `${seconds}秒前`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}分前`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}時間前`;
+      return `${Math.floor(hours / 24)}日前`;
+    }
+
+    // チャット欄の「〇分前」表示を10秒ごとに自動更新するループ
+    setInterval(() => {
+      const timeElements = document.querySelectorAll('.time-ago');
+      timeElements.forEach(el => {
+        const timestamp = parseInt(el.getAttribute('data-time'));
+        if (timestamp) {
+          el.innerText = getTimeAgo(new Date(timestamp));
+        }
+      });
+    }, 10000);
 
     function escapeHtml(str) {
       return str.replace(/[&'`<>"]/g, match => ({
@@ -373,7 +441,6 @@
       }
     }
 
-    // --- 手動リスナー追加機能 ---
     async function addManualUser() {
       const name = document.getElementById("add-name").value.trim();
       const reading = document.getElementById("add-reading").value.trim();
@@ -386,7 +453,6 @@
         return;
       }
 
-      // ドキュメントID用に一意なキーを作成（manual_タイムスタンプ）
       const manualUserId = "manual_" + Date.now();
 
       try {
@@ -396,7 +462,7 @@
           memo: memo,
           visitCount: visitCount,
           commentCount: commentCount,
-          icon: "", // 手動追加時は空欄アイコン
+          icon: "",
           firstSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
           lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
           visitedVideos: []
@@ -404,14 +470,12 @@
 
         alert(`${name} さんを登録しました！`);
         
-        // フォームリセット
         document.getElementById("add-name").value = "";
         document.getElementById("add-reading").value = "";
         document.getElementById("add-memo").value = "";
         document.getElementById("add-visit").value = "1";
         document.getElementById("add-comment").value = "1";
 
-        // 一覧を再読み込み
         loadListenerList();
       } catch (e) {
         console.error("手動登録エラー:", e);
@@ -419,7 +483,6 @@
       }
     }
 
-    // --- モーダル（編集画面）の制御 ---
     async function openModal(userId, userName) {
       document.getElementById("modal-user-id").value = userId;
       document.getElementById("modal-user-name").innerText = userName + " の編集";
@@ -468,7 +531,6 @@
       }
     }
 
-    // --- リスナー一覧の開閉・読み込み ---
     function toggleListenerList() {
       const container = document.getElementById("listener-list-container");
       if (container.style.display === "none") {
@@ -508,7 +570,7 @@
               <div class="listener-info">
                 <div style="font-weight: bold;">${escapeHtml(name)} <span style="font-weight: normal; color: #666; font-size: 11px;">${escapeHtml(reading)}</span></div>
                 <div style="color: #444; font-size: 12px; margin-top: 2px;">メモ: ${escapeHtml(memo)}</div>
-                <div style="color: #888; font-size: 11px; margin-top: 2px;">来訪: ${visitCount}回 / コメント: ${commentCount}回</div>
+                <div style="color: #888; font-size: 11px; margin-top: 2px;">来訪: ${visitCount}回 / Comment: ${commentCount}回</div>
               </div>
               <button onclick="openModal('${userId}', '${escapeHtml(name).replace(/'/g, "\\'")}')" class="sec-btn" style="padding: 4px 8px; font-size: 12px;">編集</button>
             </div>
