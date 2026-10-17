@@ -49,6 +49,7 @@
     .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
     .chat-main { flex-grow: 1; }
     .author { font-weight: bold; color: #1a73e8; cursor: pointer; text-decoration: underline; }
+    .visit-badge { font-size: 11px; color: #d97706; background: #fef3c7; padding: 1px 4px; border-radius: 4px; margin-left: 4px; font-weight: normal; }
     .time-ago { font-size: 11px; color: #888; white-space: nowrap; margin-left: 8px; }
     .status { font-size: 12px; color: #666; margin-top: 5px; }
 
@@ -76,7 +77,7 @@
   <!-- アプリメインコンテンツ（ログイン後表示） -->
   <div id="app-content">
 
-    <!-- 🌟【常時表示】上部固定：音声モニタリング（状態・アドバイス・ON/OFFボタン） -->
+    <!-- 🌟【常時表示】上部固定：音声モニタリング -->
     <div class="persistent-monitor">
       <div style="font-size: 0.85rem; font-weight: bold; color: #555; margin-bottom: 6px;">🎙️ 音声セルフ見守り</div>
       <button id="toggle-btn" class="btn-on" onclick="toggleMonitoring()">音声モニタリングを開始する (マイクON)</button>
@@ -116,32 +117,38 @@
       <div id="chat-box"></div>
     </div>
 
-    <!-- 👥 タブ2: リスナー管理 ＆ 手動追加エリア -->
+    <!-- 👥 タブ2: リスナー管理 ＆ 手動追加エリア（折りたたみ対応） -->
     <div id="tab-listener-pane" class="tab-pane">
       <div class="card">
-        <div class="add-form-box">
-          <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #1a73e8;">＋ リスナーを手動登録</h4>
-          <label class="field-label" style="margin-top:0;">名前 *必須</label>
-          <input type="text" id="add-name" placeholder="例: 常連さん">
+        <!-- 手動登録の開閉ボタン -->
+        <button onclick="toggleAddForm()" class="gray-btn" style="width: 100%; margin-bottom: 10px; font-size: 13px;">＋ リスナーを手動登録する（開く/閉じる）</button>
+        
+        <!-- 普段は隠れている手動登録フォーム -->
+        <div id="manual-add-form-container" style="display: none;">
+          <div class="add-form-box">
+            <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #1a73e8;">リスナー手動登録フォーム</h4>
+            <label class="field-label" style="margin-top:0;">名前 *必須</label>
+            <input type="text" id="add-name" placeholder="例: 常連さん">
 
-          <label class="field-label">フリガナ</label>
-          <input type="text" id="add-reading" placeholder="例: ジョウレンサン">
+            <label class="field-label">フリガナ</label>
+            <input type="text" id="add-reading" placeholder="例: ジョウレンサン">
 
-          <label class="field-label">自分用メモ</label>
-          <textarea id="add-memo" rows="2" placeholder="例: アーカイブ常連、〇〇の話題が好き"></textarea>
+            <label class="field-label">自分用メモ</label>
+            <textarea id="add-memo" rows="2" placeholder="例: アーカイブ常連、〇〇の話題が好き"></textarea>
 
-          <div style="display: flex; gap: 8px; margin-top: 6px;">
-            <div style="flex:1;">
-              <label class="field-label" style="margin-top:0;">来訪回数</label>
-              <input type="number" id="add-visit" value="1" min="1">
+            <div style="display: flex; gap: 8px; margin-top: 6px;">
+              <div style="flex:1;">
+                <label class="field-label" style="margin-top:0;">来訪回数</label>
+                <input type="number" id="add-visit" value="1" min="1">
+              </div>
+              <div style="flex:1;">
+                <label class="field-label" style="margin-top:0;">コメント数</label>
+                <input type="number" id="add-comment" value="1" min="1">
+              </div>
             </div>
-            <div style="flex:1;">
-              <label class="field-label" style="margin-top:0;">コメント数</label>
-              <input type="number" id="add-comment" value="1" min="1">
-            </div>
+
+            <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 10px;">登録する</button>
           </div>
-
-          <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 10px;">登録する</button>
         </div>
 
         <h3 style="font-size: 0.95rem; margin-bottom: 8px;">登録済みリスナー一覧</h3>
@@ -226,9 +233,18 @@
       document.getElementById(paneId).classList.add('active');
       event.currentTarget.classList.add('active');
       
-      // リスナー管理タブを開いたときに一覧を読み込む
       if (paneId === 'tab-listener-pane') {
         loadListenerList();
+      }
+    }
+
+    // --- 手動登録フォームの折りたたみ開閉 ---
+    function toggleAddForm() {
+      const container = document.getElementById("manual-add-form-container");
+      if (container.style.display === "none") {
+        container.style.display = "block";
+      } else {
+        container.style.display = "none";
       }
     }
 
@@ -510,22 +526,42 @@ ${textToAnalyze}
       } catch (error) {}
     }
 
-    function displayComment(item) {
+    // 💬 ライブチャットにコメントを表示（来訪回数バッジ付き）
+    async function displayComment(item) {
       const author = item.authorDetails.displayName;
       const userId = item.authorDetails.channelId;
       const message = item.snippet.displayMessage;
       const publishedAt = new Date(item.snippet.publishedAt);
+      const commentId = item.id;
+
       const chatBox = document.getElementById("chat-box");
       const div = document.createElement("div");
       div.className = "chat-item";
+      
       div.innerHTML = `
         <div class="chat-main">
-          <span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}:</span> ${escapeHtml(message)}
+          <span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}</span>
+          <span id="visit-badge-${commentId}" class="visit-badge"></span>: 
+          ${escapeHtml(message)}
         </div>
         <div class="time-ago" data-time="${publishedAt.getTime()}">${getTimeAgo(publishedAt)}</div>
       `;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
+
+      // データベースから来訪回数を取得してチャット欄にリアルタイム表示
+      try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          const visitCount = userDoc.data().visitCount || 1;
+          const badgeEl = document.getElementById(`visit-badge-${commentId}`);
+          if (badgeEl) {
+            badgeEl.innerText = `${visitCount}回目`;
+          }
+        }
+      } catch (e) {
+        // 取得失敗時はバッジを非表示のままにする
+      }
     }
 
     function getTimeAgo(date) {
@@ -603,6 +639,7 @@ ${textToAnalyze}
         document.getElementById("add-name").value = "";
         document.getElementById("add-reading").value = "";
         document.getElementById("add-memo").value = "";
+        toggleAddForm(); // 登録したらフォームを閉じる
         loadListenerList();
       } catch (e) { alert("登録失敗: " + e.message); }
     }
@@ -616,12 +653,16 @@ ${textToAnalyze}
         let html = "";
         snapshot.forEach(doc => {
           const u = doc.data();
+          const visitCount = u.visitCount || 0;
+          const commentCount = u.commentCount || 0;
+
           html += `
             <div class="listener-card">
               <img src="${u.icon || 'https://via.placeholder.com/32'}" class="listener-avatar" alt="">
               <div class="listener-info">
                 <div style="font-weight: bold;">${escapeHtml(u.name || '')} <span style="color:#666; font-size:11px;">(${escapeHtml(u.reading || '')})</span></div>
                 <div style="color:#444; font-size:11px;">メモ: ${escapeHtml(u.memo || 'なし')}</div>
+                <div style="color:#888; font-size:10px; margin-top:2px;">来訪: ${visitCount}回 / コメント: ${commentCount}回</div>
               </div>
               <button onclick="openModal('${doc.id}', '${escapeHtml(u.name || '').replace(/'/g, "\\'")}')" class="sec-btn" style="padding:4px 8px; font-size:11px; width:auto;">編集</button>
             </div>
