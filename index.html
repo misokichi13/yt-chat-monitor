@@ -1,47 +1,71 @@
-<!DOCTYPE html><html lang="ja"><head>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube Chat Monitor</title>
+  <title>YouTube Chat & Voice Monitor</title>
   <style>
-    body { font-family: sans-serif; margin: 15px; background: #f5f5f5; color: #333; }
-    h1 { font-size: 1.2rem; margin-bottom: 10px; }
-    .card { background: white; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
-    .input-group { margin-bottom: 10px; }
+    body { font-family: sans-serif; margin: 10px; background: #f5f5f5; color: #333; }
+    h1 { font-size: 1.1rem; margin: 0 0 10px 0; }
+    .card { background: white; padding: 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 10px; }
+    
+    /* --- 1. 常に上部に固定表示する音声モニタリングエリア --- */
+    .persistent-monitor { background: #fff; border: 2px solid #ccc; padding: 12px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    button { padding: 10px 14px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+    .btn-on { background: #28a745; color: white; }
+    .btn-off { background: #dc3545; color: white; }
+    .sec-btn { background: #1a73e8; color: white; }
+    .gray-btn { background: #666; color: white; }
+    .add-btn { background: #28a745; color: white; }
+
+    /* アドバイス・ステータスボックス */
+    #advice-box { padding: 10px; border-radius: 6px; margin-top: 8px; transition: all 0.3s ease; }
+    .advice-default { background: #eef5ff; border: 1px solid #b8d5ff; color: #333; }
+    .advice-green { background: #d4edda; border: 2px solid #28a745; color: #155724; }
+    .advice-yellow { background: #fff3cd; border: 2px solid #ffc107; color: #856404; }
+    .advice-red { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+    .advice-title { font-size: 1rem; font-weight: bold; margin-bottom: 4px; }
+    .advice-text { font-size: 0.85rem; line-height: 1.3; }
+
+    /* --- 2. タブ切り替えメニュー --- */
+    .tab-menu { display: flex; gap: 5px; margin-bottom: 10px; }
+    .tab-btn { flex: 1; padding: 8px 4px; font-size: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; text-align: center; font-weight: bold; }
+    .tab-btn.active { background: #1a73e8; color: white; }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* --- 3. 各種パーツのスタイル --- */
     input, textarea { padding: 8px; width: 100%; box-sizing: border-box; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
     input[type="text"].short-input { width: 65%; }
-    button { padding: 8px 12px; font-size: 14px; background: #FF0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button.sec-btn { background: #1a73e8; }
-    button.gray-btn { background: #666; }
-    button.add-btn { background: #28a745; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    
-    /* 現在時刻の大きな表示エリア */
-    .clock-display { background: #1a73e8; color: white; padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px; }
-    #current-time { font-size: 2rem; font-weight: bold; letter-spacing: 1px; }
-    #current-date { font-size: 0.85rem; opacity: 0.9; }
+    .field-label { font-size: 12px; color: #666; margin-top: 8px; display: block; }
 
-    #chat-box { background: white; border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; border-radius: 4px; margin-bottom: 15px; }
+    /* 現在時刻の表示枠 */
+    .clock-display { background: #1a73e8; color: white; padding: 8px; border-radius: 6px; text-align: center; margin-bottom: 10px; }
+    #current-time { font-size: 1.5rem; font-weight: bold; }
+    #current-date { font-size: 0.75rem; opacity: 0.9; }
+
+    #chat-box { background: white; border: 1px solid #ccc; padding: 8px; height: 260px; overflow-y: scroll; border-radius: 4px; margin-bottom: 10px; }
     .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
     .chat-main { flex-grow: 1; }
     .author { font-weight: bold; color: #1a73e8; cursor: pointer; text-decoration: underline; }
     .time-ago { font-size: 11px; color: #888; white-space: nowrap; margin-left: 8px; }
     .status { font-size: 12px; color: #666; margin-top: 5px; }
-    #app-content { display: none; }
 
-    /* モーダル（編集画面）のスタイル */
+    /* リスナー一覧 */
+    .listener-card { background: #fff; border: 1px solid #ddd; padding: 8px; border-radius: 6px; margin-bottom: 8px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .listener-info { flex-grow: 1; margin-left: 8px; }
+    .listener-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+    .add-form-box { background: #eef5ff; border: 1px solid #b8d5ff; padding: 10px; border-radius: 6px; margin-bottom: 12px; }
+
+    /* モーダル */
     #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
     .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     .modal-header { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; }
-    .field-label { font-size: 12px; color: #666; margin-top: 10px; display: block; }
-
-    /* リスナー一覧のスタイル */
-    .listener-card { background: #fff; border: 1px solid #ddd; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
-    .listener-info { flex-grow: 1; margin-left: 10px; }
-    .listener-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-    .add-form-box { background: #eef5ff; border: 1px solid #b8d5ff; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
-  </style></head><body>
-
-  <h1>YouTube Live Chat Monitor</h1>
+    #app-content { display: none; }
+  </style>
+</head>
+<body>
 
   <!-- ログインエリア -->
   <div class="card" id="auth-card">
@@ -51,45 +75,62 @@
 
   <!-- アプリメインコンテンツ（ログイン後表示） -->
   <div id="app-content">
-    
-    <!-- 現在時刻の大きな表示枠 -->
-    <div class="clock-display">
-      <div id="current-date">----/--/-- (-)</div>
-      <div id="current-time">00:00:00</div>
+
+    <!-- 🌟【常時表示】上部固定：音声モニタリング（状態・アドバイス・ON/OFFボタン） -->
+    <div class="persistent-monitor">
+      <div style="font-size: 0.85rem; font-weight: bold; color: #555; margin-bottom: 6px;">🎙️ 音声セルフ見守り</div>
+      <button id="toggle-btn" class="btn-on" onclick="toggleMonitoring()">音声モニタリングを開始する (マイクON)</button>
+      
+      <div id="advice-box" class="advice-default">
+        <div class="advice-title">💤 停止中</div>
+        <div class="advice-text">開始ボタンを押すと、AIが音声コンディションをここに常時表示します。</div>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="input-group">
-        <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
-      </div>
-      <div class="input-group" style="margin-top: 15px;">
-        <span style="font-size: 12px; color: #666;">または手動で動画ID・URLを指定:</span><br>
-        <input type="text" id="videoId" class="short-input" placeholder="動画IDまたはURL">
-        <button onclick="startManualMonitoring()">ID指定で開始</button>
-      </div>
-      <div class="status" id="monitor-status">待機中</div>
+    <!-- 📑 タブ切り替えボタン -->
+    <div class="tab-menu">
+      <button class="tab-btn active" onclick="switchTab('tab-chat-pane')">💬 ライブチャット</button>
+      <button class="tab-btn" onclick="switchTab('tab-listener-pane')">👥 リスナー管理</button>
+      <button class="tab-btn" onclick="switchTab('tab-settings-pane')">⚙️ 設定・ログ</button>
     </div>
 
-    <div id="chat-box"></div>
+    <!-- 💬 タブ1: ライブチャット監視エリア -->
+    <div id="tab-chat-pane" class="tab-pane active">
+      <div class="clock-display">
+        <div id="current-date">----/--/-- (-)</div>
+        <div id="current-time">00:00:00</div>
+      </div>
 
-    <!-- リスナー一覧＆手動追加エリア -->
-    <div class="card">
-      <button onclick="toggleListenerList()" class="gray-btn" style="width: 100%;">リスナー一覧・管理を開く/閉じる</button>
-      <div id="listener-list-container" style="display: none; margin-top: 15px;">
-        
-        <!-- 手動追加フォーム -->
+      <div class="card">
+        <div class="input-group">
+          <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
+        </div>
+        <div class="input-group" style="margin-top: 10px;">
+          <span style="font-size: 12px; color: #666;">または動画ID・URLを指定:</span><br>
+          <input type="text" id="videoId" class="short-input" placeholder="動画IDまたはURL">
+          <button onclick="startManualMonitoring()" style="background:#333; width: auto; padding: 8px;">開始</button>
+        </div>
+        <div class="status" id="monitor-status">待機中</div>
+      </div>
+
+      <div id="chat-box"></div>
+    </div>
+
+    <!-- 👥 タブ2: リスナー管理 ＆ 手動追加エリア -->
+    <div id="tab-listener-pane" class="tab-pane">
+      <div class="card">
         <div class="add-form-box">
-          <h4 style="margin: 0 0 8px 0; font-size: 0.95rem; color: #1a73e8;">＋ 過去のリスナーを手動で登録</h4>
-          <label class="field-label" style="margin-top:0;">名前 (ユーザー名) *必須</label>
+          <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #1a73e8;">＋ リスナーを手動登録</h4>
+          <label class="field-label" style="margin-top:0;">名前 *必須</label>
           <input type="text" id="add-name" placeholder="例: 常連さん">
 
-          <label class="field-label">フリガナ (reading)</label>
+          <label class="field-label">フリガナ</label>
           <input type="text" id="add-reading" placeholder="例: ジョウレンサン">
 
-          <label class="field-label">自分用メモ (memo)</label>
-          <textarea id="add-memo" rows="2" placeholder="例: アーカイブコメント常連、〇〇の話題で盛り上がる"></textarea>
+          <label class="field-label">自分用メモ</label>
+          <textarea id="add-memo" rows="2" placeholder="例: アーカイブ常連、〇〇の話題が好き"></textarea>
 
-          <div style="display: flex; gap: 10px; margin-top: 8px;">
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
             <div style="flex:1;">
               <label class="field-label" style="margin-top:0;">来訪回数</label>
               <input type="number" id="add-visit" value="1" min="1">
@@ -100,35 +141,52 @@
             </div>
           </div>
 
-          <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 12px;">登録する</button>
+          <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 10px;">登録する</button>
         </div>
 
-        <h3 style="font-size: 1rem; margin-bottom: 10px;">登録済みリスナー一覧</h3>
+        <h3 style="font-size: 0.95rem; margin-bottom: 8px;">登録済みリスナー一覧</h3>
         <div id="listener-cards-area">読み込み中...</div>
       </div>
     </div>
+
+    <!-- ⚙️ タブ3: 音声発話ログ ＆ 設定エリア -->
+    <div id="tab-settings-pane" class="tab-pane">
+      <div class="card" style="background: #fff8e1; border: 1px solid #ffe0b2;">
+        <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">🔒 Gemini APIキーの設定</div>
+        <input type="password" id="api-key-input" placeholder="AIzaSy... から始まるAPIキーを入力">
+        <button onclick="saveApiKey()" class="sec-btn" style="margin-top: 6px; width: auto; padding: 6px 12px;">キーを保存する</button>
+        <span id="key-status-text" style="margin-left: 8px; font-size: 12px; color: #28a745; font-weight: bold;"></span>
+      </div>
+
+      <div class="card">
+        <h4 style="margin: 0 0 5px 0; font-size: 0.85rem; color: #666;">リアルタイム発話ログ（音声認識の確認用）</h4>
+        <div id="transcript-box"></div>
+        <button onclick="analyzeSpeechWithGemini()" class="gray-btn" style="margin-top: 8px; font-size: 13px; padding: 6px;">▶ 今すぐAI判定をテスト実行</button>
+      </div>
+    </div>
+
   </div>
 
-  <!-- 編集モーダル（ポップアップ） -->
+  <!-- 編集モーダル -->
   <div id="edit-modal">
     <div class="modal-content">
       <div class="modal-header" id="modal-user-name">ユーザー情報編集</div>
       <input type="hidden" id="modal-user-id">
       
-      <label class="field-label">フリガナ (reading)</label>
-      <input type="text" id="modal-reading" placeholder="例: リスナーメイ">
+      <label class="field-label">フリガナ</label>
+      <input type="text" id="modal-reading">
 
-      <label class="field-label">自分用メモ (memo)</label>
-      <textarea id="modal-memo" rows="3" placeholder="例: 雑談好き、〇〇の話題に反応する"></textarea>
+      <label class="field-label">自分用メモ</label>
+      <textarea id="modal-memo" rows="3"></textarea>
 
-      <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 8px;">
-        <button onclick="closeModal()" class="gray-btn">キャンセル</button>
-        <button onclick="saveUserMemo()" class="sec-btn">保存する</button>
+      <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;">
+        <button onclick="closeModal()" class="gray-btn" style="width: auto; padding: 6px 12px;">キャンセル</button>
+        <button onclick="saveUserMemo()" class="sec-btn" style="width: auto; padding: 6px 12px;">保存する</button>
       </div>
     </div>
   </div>
 
-  <!-- Firebase (SDK v9 Compatibility) -->
+  <!-- Firebase & Scripts -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -150,12 +208,31 @@
 
     const YOUTUBE_API_KEY = "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA";
     const MY_CHANNEL_ID = "UCwta9DQxsI-A1sVF3SWNHfg"; 
+    const GEMINI_MODEL = "gemini-3.8-flash";
+    const EVALUATION_INTERVAL_SEC = 60;
 
     let nextPageToken = "";
     let intervalId = null;
     let wakeLock = null;
+    let isMonitoring = false;
+    let recognition = null;
+    let speechBuffer = [];
+    let evalTimer = null;
 
-    // --- リアルタイム時計の更新（毎秒） ---
+    // --- タブ切り替え関数 ---
+    function switchTab(paneId) {
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(paneId).classList.add('active');
+      event.currentTarget.classList.add('active');
+      
+      // リスナー管理タブを開いたときに一覧を読み込む
+      if (paneId === 'tab-listener-pane') {
+        loadListenerList();
+      }
+    }
+
+    // --- リアルタイム時計 ---
     function updateClock() {
       const now = new Date();
       const year = now.getFullYear();
@@ -163,7 +240,6 @@
       const day = String(now.getDate()).padStart(2, '0');
       const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
       const week = daysOfWeek[now.getDay()];
-
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
@@ -172,57 +248,188 @@
       document.getElementById("current-time").innerText = `${hours}:${minutes}:${seconds}`;
     }
     setInterval(updateClock, 1000);
-    updateClock(); // 初回実行
+    updateClock();
 
+    // --- Wake Lock ---
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-        } catch (err) {
-          console.error(`${err.name}, ${err.message}`);
-        }
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
       }
     }
-
     document.addEventListener('visibilitychange', async () => {
-      if (wakeLock !== null && document.visibilityState === 'visible') {
-        requestWakeLock();
-      }
+      if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
     });
 
+    // --- 認証 ---
     auth.onAuthStateChanged(user => {
-      const authCard = document.getElementById("auth-card");
-      const loginStatus = document.getElementById("login-status");
-      const loginBtn = document.getElementById("login-btn");
-      const appContent = document.getElementById("app-content");
-
       if (user) {
-        authCard.style.display = "none";
-        appContent.style.display = "block";
+        document.getElementById("auth-card").style.display = "none";
+        document.getElementById("app-content").style.display = "block";
       } else {
-        authCard.style.display = "block";
-        loginStatus.innerHTML = "アクセスするにはログインが必要です。";
-        loginBtn.style.display = "inline-block";
-        appContent.style.display = "none";
+        document.getElementById("auth-card").style.display = "block";
+        document.getElementById("login-status").innerHTML = "アクセスするにはログインが必要です。";
+        document.getElementById("login-btn").style.display = "inline-block";
+        document.getElementById("app-content").style.display = "none";
       }
     });
 
     function loginWithGoogle() {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider).catch(error => {
-        alert("ログイン失敗: " + error.message);
-      });
+      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(error => alert("ログイン失敗: " + error.message));
     }
 
-    async function startAutoMonitoring() {
-      const targetId = MY_CHANNEL_ID;
-      if (!targetId) {
-        const id = prompt("チャンネルIDを入力してください:");
-        if (!id) return;
-        runMonitoringById(id);
-      } else {
-        runMonitoringById(targetId);
+    // --- APIキー保存 ---
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('gemini_api_key');
+      if (savedKey) {
+        document.getElementById('api-key-input').value = savedKey;
+        document.getElementById('key-status-text').innerText = "✓ 保存済み";
       }
+    });
+
+    function saveApiKey() {
+      const key = document.getElementById('api-key-input').value.trim();
+      if (!key) { alert("APIキーを入力してください。"); return; }
+      localStorage.setItem('gemini_api_key', key);
+      document.getElementById('key-status-text').innerText = "✓ 保存しました！";
+      alert("APIキーを保存しました。");
+    }
+
+    // --- 音声モニタリング制御 ---
+    function toggleMonitoring() {
+      const savedKey = localStorage.getItem('gemini_api_key');
+      if (!savedKey) {
+        alert("先に設定タブでGemini APIキーを入力して保存してください。");
+        return;
+      }
+      if (isMonitoring) stopMonitoring(); else startMonitoring();
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function startMonitoring() {
+      if (!SpeechRecognition) {
+        alert("お使いのブラウザは音声認識に対応していません。");
+        return;
+      }
+
+      requestWakeLock();
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            const text = event.results[i][0].transcript.trim();
+            if (text) {
+              const time = new Date().toLocaleTimeString();
+              speechBuffer.push(`[${time}] ${text}`);
+              const logBox = document.getElementById("transcript-box");
+              logBox.innerHTML += `<div><span style="color:#888;">${time}</span> ${escapeHtml(text)}</div>`;
+              logBox.scrollTop = logBox.scrollHeight;
+            }
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        if (isMonitoring && event.error !== 'not-allowed') {
+          setTimeout(() => recognition && recognition.start(), 1000);
+        }
+      };
+
+      recognition.onend = () => {
+        if (isMonitoring) { try { recognition.start(); } catch(e){} }
+      };
+
+      try {
+        recognition.start();
+        isMonitoring = true;
+        document.getElementById("toggle-btn").innerText = "音声モニタリングを停止する (マイクOFF)";
+        document.getElementById("toggle-btn").className = "btn-off";
+        updateAdviceBox("green", "🟢 トーク順調（モニタリング中）", "マイク稼働中です。このままお話しください。");
+        evalTimer = setInterval(analyzeSpeechWithGemini, EVALUATION_INTERVAL_SEC * 1000);
+      } catch (err) {
+        alert("マイク起動失敗: " + err.message);
+      }
+    }
+
+    function stopMonitoring() {
+      isMonitoring = false;
+      if (recognition) { recognition.stop(); recognition = null; }
+      if (evalTimer) { clearInterval(evalTimer); evalTimer = null; }
+      document.getElementById("toggle-btn").innerText = "音声モニタリングを開始する (マイクON)";
+      document.getElementById("toggle-btn").className = "btn-on";
+      updateAdviceBox("default", "💤 停止中", "開始ボタンを押すと、AIが音声コンディションをここに常時表示します。");
+    }
+
+    async function analyzeSpeechWithGemini() {
+      const apiKey = localStorage.getItem('gemini_api_key');
+      if (!apiKey) { alert("APIキーが保存されていません。設定タブを確認してください。"); return; }
+
+      const textToAnalyze = speechBuffer.length > 0 ? speechBuffer.join("\n") : "[テスト発話] こんばんは、今日も配信の調子を確認しています。よろしくお願いします。";
+      speechBuffer = [];
+      updateAdviceBox("default", "⏳ 分析中...", "AIが直近の発話をチェックしています...");
+
+      const prompt = `
+あなたはゲーム配信者のセルフコンディショニングAIアシスタントです。
+以下は配信者が話した発話内容の書き起こしです。
+言語の乱れ、思考の言いよどみ、同じ言葉の極端な繰り返し、疲労や焦りの兆候がないか簡単に分析してください。
+
+【発話ログ】
+${textToAnalyze}
+
+【出力フォーマット】
+以下の2項目のみを短い日本語で出力してください。
+ステータス: [良好 / やや疲労 / 要休憩] のいずれか1つ
+アドバイス: [1文程度の優しく具体的なアドバイス（例: 一口お茶を飲もう、少しゆっくり話そう等）]
+`;
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || "APIエラー");
+
+        if (data.candidates && data.candidates[0].content.parts[0].text) {
+          const resultText = data.candidates[0].content.parts[0].text;
+          if (resultText.includes("要休憩")) {
+            updateAdviceBox("red", "🔴 要休憩：少し休みましょう！", resultText);
+          } else if (resultText.includes("やや疲労")) {
+            updateAdviceBox("yellow", "🟡 やや疲労：お疲れ気味です", resultText);
+          } else {
+            updateAdviceBox("green", "🟢 良好：トーク順調です！", resultText);
+          }
+        } else {
+          throw new Error("AIからの応答形式エラー");
+        }
+      } catch (err) {
+        updateAdviceBox("red", "❌ エラー発生", err.message);
+      }
+    }
+
+    function updateAdviceBox(type, title, text) {
+      const box = document.getElementById("advice-box");
+      box.className = "advice-box ";
+      if (type === "green") box.className = "advice-box advice-green";
+      else if (type === "yellow") box.className = "advice-box advice-yellow";
+      else if (type === "red") box.className = "advice-box advice-red";
+      else box.className = "advice-box advice-default";
+
+      box.innerHTML = `
+        <div class="advice-title">${escapeHtml(title)}</div>
+        <div class="advice-text">${escapeHtml(text)}</div>
+      `;
+    }
+
+    // --- 配信チャット監視関連 ---
+    async function startAutoMonitoring() {
+      runMonitoringById(MY_CHANNEL_ID);
     }
 
     async function runMonitoringById(channelId) {
@@ -242,36 +449,20 @@
       try {
         const res = await fetch(url);
         const data = await res.json();
-        if (data.items && data.items.length > 0) {
-          return data.items[0].id.videoId;
-        }
-      } catch (e) {
-        console.error("配信検索エラー:", e);
-      }
+        if (data.items && data.items.length > 0) return data.items[0].id.videoId;
+      } catch (e) {}
       return null;
     }
 
     async function startManualMonitoring() {
       let inputVal = document.getElementById("videoId").value.trim();
-      if (!inputVal) {
-        alert("動画IDまたはURLを入力してください");
-        return;
-      }
-
+      if (!inputVal) { alert("動画IDまたはURLを入力してください"); return; }
       let videoId = inputVal;
-      if (inputVal.includes("youtu.be/")) {
-        videoId = inputVal.split("youtu.be/")[1]?.split("?")[0];
-      } else if (inputVal.includes("watch?v=")) {
-        videoId = inputVal.split("watch?v=")[1]?.split("&")[0];
-      } else if (inputVal.includes("/live/")) {
-        videoId = inputVal.split("/live/")[1]?.split("?")[0];
-      }
+      if (inputVal.includes("youtu.be/")) videoId = inputVal.split("youtu.be/")[1]?.split("?")[0];
+      else if (inputVal.includes("watch?v=")) videoId = inputVal.split("watch?v=")[1]?.split("&")[0];
+      else if (inputVal.includes("/live/")) videoId = inputVal.split("/live/")[1]?.split("?")[0];
 
-      if (!videoId) {
-        alert("有効な動画IDまたはURLが見つかりませんでした。");
-        return;
-      }
-
+      if (!videoId) { alert("有効な動画IDが見つかりません。"); return; }
       document.getElementById("videoId").value = videoId;
       initMonitoring(videoId);
     }
@@ -285,77 +476,58 @@
         updateStatus("取得失敗");
         return;
       }
-
-      updateStatus(`監視中 (動画ID: ${videoId})`);
+      updateStatus(`監視中 (ID: ${videoId})`);
       document.getElementById("chat-box").innerHTML = "";
       nextPageToken = "";
-
       fetchChatMessages(liveChatId, videoId);
-
       if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(() => {
-        fetchChatMessages(liveChatId, videoId);
-      }, 5000);
+      intervalId = setInterval(() => fetchChatMessages(liveChatId, videoId), 5000);
     }
 
     async function getLiveChatId(videoId) {
       const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        return data.items[0].liveStreamingDetails?.activeLiveChatId || null;
-      }
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.items && data.items.length > 0) return data.items[0].liveStreamingDetails?.activeLiveChatId || null;
+      } catch (e) {}
       return null;
     }
 
     async function fetchChatMessages(liveChatId, videoId) {
       let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
-      if (nextPageToken) {
-        url += `&pageToken=${nextPageToken}`;
-      }
-
+      if (nextPageToken) url += `&pageToken=${nextPageToken}`;
       try {
         const res = await fetch(url);
         const data = await res.json();
-        
         if (data.items && data.items.length > 0) {
           nextPageToken = data.nextPageToken;
-
           for (const item of data.items) {
             displayComment(item);
             await saveCommentAndUser(item, videoId);
           }
         }
-      } catch (error) {
-        console.error("メッセージ取得・保存エラー:", error);
-      }
+      } catch (error) {}
     }
 
-    // チャット表示（〇分前などの相対時間を計算して埋め込む）
     function displayComment(item) {
       const author = item.authorDetails.displayName;
       const userId = item.authorDetails.channelId;
       const message = item.snippet.displayMessage;
       const publishedAt = new Date(item.snippet.publishedAt);
-
       const chatBox = document.getElementById("chat-box");
       const div = document.createElement("div");
       div.className = "chat-item";
-      
-      // 投稿時間の相対表示を計算する関数
-      const timeAgoText = getTimeAgo(publishedAt);
-
       div.innerHTML = `
         <div class="chat-main">
           <span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}:</span> ${escapeHtml(message)}
         </div>
-        <div class="time-ago" data-time="${publishedAt.getTime()}">${timeAgoText}</div>
+        <div class="time-ago" data-time="${publishedAt.getTime()}">${getTimeAgo(publishedAt)}</div>
       `;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // 相対時間を計算するヘルパー関数
     function getTimeAgo(date) {
       const seconds = Math.floor((new Date() - date) / 1000);
       if (seconds < 10) return "たった今";
@@ -367,44 +539,24 @@
       return `${Math.floor(hours / 24)}日前`;
     }
 
-    // チャット欄の「〇分前」表示を10秒ごとに自動更新するループ
     setInterval(() => {
-      const timeElements = document.querySelectorAll('.time-ago');
-      timeElements.forEach(el => {
-        const timestamp = parseInt(el.getAttribute('data-time'));
-        if (timestamp) {
-          el.innerText = getTimeAgo(new Date(timestamp));
-        }
+      document.querySelectorAll('.time-ago').forEach(el => {
+        const ts = parseInt(el.getAttribute('data-time'));
+        if (ts) el.innerText = getTimeAgo(new Date(ts));
       });
     }, 10000);
-
-    function escapeHtml(str) {
-      return str.replace(/[&'`<>"]/g, match => ({
-        '&': '&amp;',
-        "'": '&#x27;',
-        '`': '&#x60;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-      }[match]));
-    }
 
     async function saveCommentAndUser(item, videoId) {
       try {
         const author = item.authorDetails;
-        const message = item.snippet.displayMessage || "";
-        const publishedAt = new Date(item.snippet.publishedAt);
-
         const userId = author.channelId;
         const userName = author.displayName;
-        const userIcon = author.profileImageUrl;
-
         const userRef = db.collection('users').doc(userId);
         const userDoc = await userRef.get();
 
         let updateData = {
           name: userName,
-          icon: userIcon,
+          icon: author.profileImageUrl,
           lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
           commentCount: firebase.firestore.FieldValue.increment(1)
         };
@@ -416,71 +568,67 @@
           updateData.reading = "";
           updateData.memo = "";
         } else {
-          const data = userDoc.data();
-          const visitedVideos = data.visitedVideos || [];
-
+          const visitedVideos = userDoc.data().visitedVideos || [];
           if (!visitedVideos.includes(videoId)) {
             updateData.visitCount = firebase.firestore.FieldValue.increment(1);
             updateData.visitedVideos = firebase.firestore.FieldValue.arrayUnion(videoId);
           }
         }
-
         await userRef.set(updateData, { merge: true });
-
-        const commentId = item.id;
-        const commentRef = db.collection('comments').doc(commentId);
-        await commentRef.set({
-          userId: userId,
-          userName: userName,
-          message: message,
-          createdAt: publishedAt,
-          videoId: videoId
+        await db.collection('comments').doc(item.id).set({
+          userId: userId, userName: userName, message: item.snippet.displayMessage || "",
+          createdAt: new Date(item.snippet.publishedAt), videoId: videoId
         });
-      } catch (err) {
-        console.error("Firestore書き込み失敗:", err);
-      }
+      } catch (err) {}
     }
 
+    // --- リスナー手動追加・管理 ---
     async function addManualUser() {
       const name = document.getElementById("add-name").value.trim();
-      const reading = document.getElementById("add-reading").value.trim();
-      const memo = document.getElementById("add-memo").value.trim();
-      const visitCount = parseInt(document.getElementById("add-visit").value) || 1;
-      const commentCount = parseInt(document.getElementById("add-comment").value) || 1;
-
-      if (!name) {
-        alert("名前を入力してください。");
-        return;
-      }
-
+      if (!name) { alert("名前を入力してください。"); return; }
       const manualUserId = "manual_" + Date.now();
-
       try {
         await db.collection('users').doc(manualUserId).set({
           name: name,
-          reading: reading,
-          memo: memo,
-          visitCount: visitCount,
-          commentCount: commentCount,
+          reading: document.getElementById("add-reading").value.trim(),
+          memo: document.getElementById("add-memo").value.trim(),
+          visitCount: parseInt(document.getElementById("add-visit").value) || 1,
+          commentCount: parseInt(document.getElementById("add-comment").value) || 1,
           icon: "",
           firstSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
           lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
           visitedVideos: []
         });
-
         alert(`${name} さんを登録しました！`);
-        
         document.getElementById("add-name").value = "";
         document.getElementById("add-reading").value = "";
         document.getElementById("add-memo").value = "";
-        document.getElementById("add-visit").value = "1";
-        document.getElementById("add-comment").value = "1";
-
         loadListenerList();
-      } catch (e) {
-        console.error("手動登録エラー:", e);
-        alert("登録に失敗しました: " + e.message);
-      }
+      } catch (e) { alert("登録失敗: " + e.message); }
+    }
+
+    async function loadListenerList() {
+      const area = document.getElementById("listener-cards-area");
+      area.innerHTML = "読み込み中...";
+      try {
+        const snapshot = await db.collection('users').orderBy('lastSeenAt', 'desc').limit(50).get();
+        if (snapshot.empty) { area.innerHTML = "データがありません。"; return; }
+        let html = "";
+        snapshot.forEach(doc => {
+          const u = doc.data();
+          html += `
+            <div class="listener-card">
+              <img src="${u.icon || 'https://via.placeholder.com/32'}" class="listener-avatar" alt="">
+              <div class="listener-info">
+                <div style="font-weight: bold;">${escapeHtml(u.name || '')} <span style="color:#666; font-size:11px;">(${escapeHtml(u.reading || '')})</span></div>
+                <div style="color:#444; font-size:11px;">メモ: ${escapeHtml(u.memo || 'なし')}</div>
+              </div>
+              <button onclick="openModal('${doc.id}', '${escapeHtml(u.name || '').replace(/'/g, "\\'")}')" class="sec-btn" style="padding:4px 8px; font-size:11px; width:auto;">編集</button>
+            </div>
+          `;
+        });
+        area.innerHTML = html;
+      } catch (e) { area.innerHTML = "取得失敗"; }
     }
 
     async function openModal(userId, userName) {
@@ -488,103 +636,34 @@
       document.getElementById("modal-user-name").innerText = userName + " の編集";
       document.getElementById("modal-reading").value = "";
       document.getElementById("modal-memo").value = "";
-
       try {
         const doc = await db.collection('users').doc(userId).get();
         if (doc.exists) {
-          const data = doc.data();
-          document.getElementById("modal-reading").value = data.reading || "";
-          document.getElementById("modal-memo").value = data.memo || "";
+          document.getElementById("modal-reading").value = doc.data().reading || "";
+          document.getElementById("modal-memo").value = doc.data().memo || "";
         }
-      } catch (e) {
-        console.error("ユーザー情報取得失敗:", e);
-      }
-
+      } catch (e) {}
       document.getElementById("edit-modal").style.display = "flex";
     }
 
-    function closeModal() {
-      document.getElementById("edit-modal").style.display = "none";
-    }
+    function closeModal() { document.getElementById("edit-modal").style.display = "none"; }
 
     async function saveUserMemo() {
       const userId = document.getElementById("modal-user-id").value;
-      const reading = document.getElementById("modal-reading").value;
-      const memo = document.getElementById("modal-memo").value;
-
       if (!userId) return;
-
       try {
         await db.collection('users').doc(userId).update({
-          reading: reading,
-          memo: memo
+          reading: document.getElementById("modal-reading").value,
+          memo: document.getElementById("modal-memo").value
         });
         alert("保存しました！");
         closeModal();
-        
-        if (document.getElementById("listener-list-container").style.display === "block") {
-          loadListenerList();
-        }
-      } catch (e) {
-        console.error("保存失敗:", e);
-        alert("保存に失敗しました: " + e.message);
-      }
-    }
-
-    function toggleListenerList() {
-      const container = document.getElementById("listener-list-container");
-      if (container.style.display === "none") {
-        container.style.display = "block";
         loadListenerList();
-      } else {
-        container.style.display = "none";
-      }
+      } catch (e) { alert("保存失敗"); }
     }
 
-    async function loadListenerList() {
-      const area = document.getElementById("listener-cards-area");
-      area.innerHTML = "読み込み中...";
-
-      try {
-        const snapshot = await db.collection('users').orderBy('lastSeenAt', 'desc').limit(50).get();
-        
-        if (snapshot.empty) {
-          area.innerHTML = "まだリスナーデータがありません。";
-          return;
-        }
-
-        let html = "";
-        snapshot.forEach(doc => {
-          const u = doc.data();
-          const userId = doc.id;
-          const name = u.name || "名無し";
-          const reading = u.reading ? `(${u.reading})` : "";
-          const icon = u.icon || "https://via.placeholder.com/36";
-          const visitCount = u.visitCount || 0;
-          const commentCount = u.commentCount || 0;
-          const memo = u.memo || "メモなし";
-
-          html += `
-            <div class="listener-card">
-              <img src="${icon}" class="listener-avatar" alt="">
-              <div class="listener-info">
-                <div style="font-weight: bold;">${escapeHtml(name)} <span style="font-weight: normal; color: #666; font-size: 11px;">${escapeHtml(reading)}</span></div>
-                <div style="color: #444; font-size: 12px; margin-top: 2px;">メモ: ${escapeHtml(memo)}</div>
-                <div style="color: #888; font-size: 11px; margin-top: 2px;">来訪: ${visitCount}回 / Comment: ${commentCount}回</div>
-              </div>
-              <button onclick="openModal('${userId}', '${escapeHtml(name).replace(/'/g, "\\'")}')" class="sec-btn" style="padding: 4px 8px; font-size: 12px;">編集</button>
-            </div>
-          `;
-        });
-
-        area.innerHTML = html;
-      } catch (e) {
-        console.error("リスナー一覧取得エラー:", e);
-        area.innerHTML = "一覧の取得に失敗しました。";
-      }
-    }
-
-    function updateStatus(msg) {
-      document.getElementById("monitor-status").innerText = "ステータス: " + msg;
-    }
-  </script></body></html>
+    function updateStatus(msg) { document.getElementById("monitor-status").innerText = "ステータス: " + msg; }
+    function escapeHtml(str) { return str.replace(/[&'`<>"]/g, m => ({'&':'&amp;','\'':'&#x27;','`':'&#x60;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+  </script>
+</body>
+</html>
