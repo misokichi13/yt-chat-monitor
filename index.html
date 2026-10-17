@@ -5,64 +5,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube Chat & Voice Monitor</title>
   <style>
-    body { font-family: sans-serif; margin: 10px; background: #f5f5f5; color: #333; }
-    h1 { font-size: 1.1rem; margin: 0 0 10px 0; }
-    .card { background: white; padding: 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 10px; }
+    body { font-family: sans-serif; margin: 8px; background: #f5f5f5; color: #333; }
+    .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 8px; }
     
-    /* --- 1. 常に上部に固定表示する音声モニタリングエリア --- */
-    .persistent-monitor { background: #fff; border: 2px solid #ccc; padding: 12px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    button { padding: 10px 14px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+    /* --- 1. 常時固定表示：音声モニタリングエリア（コンパクト化） --- */
+    .persistent-monitor { background: #fff; border: 2px solid #ccc; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    button { padding: 8px 12px; font-size: 13px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
     .btn-on { background: #28a745; color: white; }
     .btn-off { background: #dc3545; color: white; }
     .sec-btn { background: #1a73e8; color: white; }
     .gray-btn { background: #666; color: white; }
     .add-btn { background: #28a745; color: white; }
 
-    /* アドバイス・ステータスボックス */
-    #advice-box { padding: 10px; border-radius: 6px; margin-top: 8px; transition: all 0.3s ease; }
+    #advice-box { padding: 8px; border-radius: 6px; margin-top: 6px; transition: all 0.3s ease; }
     .advice-default { background: #eef5ff; border: 1px solid #b8d5ff; color: #333; }
     .advice-green { background: #d4edda; border: 2px solid #28a745; color: #155724; }
     .advice-yellow { background: #fff3cd; border: 2px solid #ffc107; color: #856404; }
     .advice-red { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
-    .advice-title { font-size: 1rem; font-weight: bold; margin-bottom: 4px; }
-    .advice-text { font-size: 0.85rem; line-height: 1.3; }
+    .advice-title { font-size: 0.95rem; font-weight: bold; margin-bottom: 2px; }
+    .advice-text { font-size: 0.8rem; line-height: 1.2; }
 
     /* --- 2. タブ切り替えメニュー --- */
-    .tab-menu { display: flex; gap: 5px; margin-bottom: 10px; }
-    .tab-btn { flex: 1; padding: 8px 4px; font-size: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; text-align: center; font-weight: bold; }
+    .tab-menu { display: flex; gap: 4px; margin-bottom: 8px; }
+    .tab-btn { flex: 1; padding: 7px 2px; font-size: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; text-align: center; font-weight: bold; }
     .tab-btn.active { background: #1a73e8; color: white; }
 
     .tab-pane { display: none; }
     .tab-pane.active { display: block; }
 
-    /* --- 3. 各種パーツのスタイル --- */
-    input, textarea { padding: 8px; width: 100%; box-sizing: border-box; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
-    input[type="text"].short-input { width: 65%; }
-    .field-label { font-size: 12px; color: #666; margin-top: 8px; display: block; }
+    /* --- 3. コントロール＆時計の1行配置レイアウト --- */
+    .control-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .clock-badge { background: #1a73e8; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9rem; letter-spacing: 1px; white-space: nowrap; }
 
-    /* 現在時刻の表示枠 */
-    .clock-display { background: #1a73e8; color: white; padding: 8px; border-radius: 6px; text-align: center; margin-bottom: 10px; }
-    #current-time { font-size: 1.5rem; font-weight: bold; }
-    #current-date { font-size: 0.75rem; opacity: 0.9; }
-
-    #chat-box { background: white; border: 1px solid #ccc; padding: 8px; height: 260px; overflow-y: scroll; border-radius: 4px; margin-bottom: 10px; }
-    .chat-item { border-bottom: 1px dotted #eee; padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .input-row { display: flex; gap: 6px; align-items: center; }
+    input, textarea { padding: 6px; width: 100%; box-sizing: border-box; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
+    
+    /* 🌟 コメント欄の高さを約420pxに拡大！ */
+    #chat-box { background: white; border: 1px solid #ccc; padding: 8px; height: 420px; overflow-y: scroll; border-radius: 6px; margin-top: 6px; }
+    
+    .chat-item { border-bottom: 1px dotted #eee; padding: 5px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
     .chat-main { flex-grow: 1; }
     .author { font-weight: bold; color: #1a73e8; cursor: pointer; text-decoration: underline; }
-    .visit-badge { font-size: 11px; color: #d97706; background: #fef3c7; padding: 1px 4px; border-radius: 4px; margin-left: 4px; font-weight: normal; }
-    .time-ago { font-size: 11px; color: #888; white-space: nowrap; margin-left: 8px; }
-    .status { font-size: 12px; color: #666; margin-top: 5px; }
+    .visit-badge { font-size: 10px; color: #d97706; background: #fef3c7; padding: 1px 4px; border-radius: 3px; margin-left: 3px; font-weight: normal; }
+    .time-ago { font-size: 10px; color: #888; white-space: nowrap; margin-left: 6px; }
+    .status { font-size: 11px; color: #666; margin-top: 4px; }
 
     /* リスナー一覧 */
-    .listener-card { background: #fff; border: 1px solid #ddd; padding: 8px; border-radius: 6px; margin-bottom: 8px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .listener-card { background: #fff; border: 1px solid #ddd; padding: 8px; border-radius: 6px; margin-bottom: 6px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; }
     .listener-info { flex-grow: 1; margin-left: 8px; }
-    .listener-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
-    .add-form-box { background: #eef5ff; border: 1px solid #b8d5ff; padding: 10px; border-radius: 6px; margin-bottom: 12px; }
+    .listener-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+    .add-form-box { background: #eef5ff; border: 1px solid #b8d5ff; padding: 8px; border-radius: 6px; margin-bottom: 10px; }
 
     /* モーダル */
     #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-    .modal-header { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; }
+    .modal-content { background: white; padding: 15px; border-radius: 8px; width: 90%; max-width: 360px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .modal-header { font-weight: bold; font-size: 1rem; margin-bottom: 8px; }
     #app-content { display: none; }
   </style>
 </head>
@@ -77,81 +74,77 @@
   <!-- アプリメインコンテンツ（ログイン後表示） -->
   <div id="app-content">
 
-    <!-- 🌟【常時表示】上部固定：音声モニタリング -->
+    <!-- 🌟 上部固定：音声モニタリング -->
     <div class="persistent-monitor">
-      <div style="font-size: 0.85rem; font-weight: bold; color: #555; margin-bottom: 6px;">🎙️ 音声セルフ見守り</div>
-      <button id="toggle-btn" class="btn-on" onclick="toggleMonitoring()">音声モニタリングを開始する (マイクON)</button>
+      <button id="toggle-btn" class="btn-on" onclick="toggleMonitoring()">音声モニタリング開始 (マイクON)</button>
       
       <div id="advice-box" class="advice-default">
         <div class="advice-title">💤 停止中</div>
-        <div class="advice-text">開始ボタンを押すと、AIが音声コンディションをここに常時表示します。</div>
+        <div class="advice-text">マイクONでAIコンディションを表示します。</div>
       </div>
     </div>
 
     <!-- 📑 タブ切り替えボタン -->
     <div class="tab-menu">
-      <button class="tab-btn active" onclick="switchTab('tab-chat-pane')">💬 ライブチャット</button>
-      <button class="tab-btn" onclick="switchTab('tab-listener-pane')">👥 リスナー管理</button>
-      <button class="tab-btn" onclick="switchTab('tab-settings-pane')">⚙️ 設定・ログ</button>
+      <button class="tab-btn active" onclick="switchTab('tab-chat-pane')">💬 チャット</button>
+      <button class="tab-btn" onclick="switchTab('tab-listener-pane')">👥 リスナー</button>
+      <button class="tab-btn" onclick="switchTab('tab-settings-pane')">⚙️ 設定</button>
     </div>
 
     <!-- 💬 タブ1: ライブチャット監視エリア -->
     <div id="tab-chat-pane" class="tab-pane active">
-      <div class="clock-display">
-        <div id="current-date">----/--/-- (-)</div>
-        <div id="current-time">00:00:00</div>
+      <div class="card" style="padding: 8px;">
+        <!-- 🌟 ボタンと時計をコンパクトに1行化 -->
+        <div class="control-row">
+          <button onclick="startAutoMonitoring()" class="sec-btn" style="width: auto; flex-grow: 1; padding: 6px 10px;">配信検出</button>
+          <div class="clock-badge" id="current-time">00:00:00</div>
+        </div>
+
+        <!-- 🌟 ID指定と開始ボタンも1行でコンパクト化 -->
+        <div class="input-row">
+          <input type="text" id="videoId" placeholder="動画IDまたはURL">
+          <button onclick="startManualMonitoring()" style="background:#333; color:white; width: 60px; padding: 6px;">開始</button>
+        </div>
+        <div class="status" id="monitor-status" style="margin-top:2px;">待機中</div>
       </div>
 
-      <div class="card">
-        <div class="input-group">
-          <button onclick="startAutoMonitoring()" class="sec-btn">配信を自動検出してスタート</button>
-        </div>
-        <div class="input-group" style="margin-top: 10px;">
-          <span style="font-size: 12px; color: #666;">または動画ID・URLを指定:</span><br>
-          <input type="text" id="videoId" class="short-input" placeholder="動画IDまたはURL">
-          <button onclick="startManualMonitoring()" style="background:#333; width: auto; padding: 8px;">開始</button>
-        </div>
-        <div class="status" id="monitor-status">待機中</div>
-      </div>
-
+      <!-- 🌟 広くなったメインコメント表示枠 -->
       <div id="chat-box"></div>
     </div>
 
-    <!-- 👥 タブ2: リスナー管理 ＆ 手動追加エリア（折りたたみ対応） -->
+    <!-- 👥 タブ2: リスナー管理 -->
     <div id="tab-listener-pane" class="tab-pane">
       <div class="card">
-        <!-- 手動登録の開閉ボタン -->
-        <button onclick="toggleAddForm()" class="gray-btn" style="width: 100%; margin-bottom: 10px; font-size: 13px;">＋ リスナーを手動登録する（開く/閉じる）</button>
+        <button onclick="toggleAddForm()" class="gray-btn" style="width: 100%; margin-bottom: 8px; font-size: 12px; padding: 6px;">＋ リスナーを手動登録する</button>
         
-        <!-- 普段は隠れている手動登録フォーム -->
         <div id="manual-add-form-container" style="display: none;">
           <div class="add-form-box">
-            <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #1a73e8;">リスナー手動登録フォーム</h4>
-            <label class="field-label" style="margin-top:0;">名前 *必須</label>
+            <h4 style="margin: 0 0 6px 0; font-size: 0.85rem; color: #1a73e8;">手動登録フォーム</h4>
+            <label style="font-size:11px; color:#666;">名前 *必須</label>
             <input type="text" id="add-name" placeholder="例: 常連さん">
 
-            <label class="field-label">フリガナ</label>
+            <label style="font-size:11px; color:#666; margin-top:4px; display:block;">フリガナ</label>
             <input type="text" id="add-reading" placeholder="例: ジョウレンサン">
 
-            <label class="field-label">自分用メモ</label>
-            <textarea id="add-memo" rows="2" placeholder="例: アーカイブ常連、〇〇の話題が好き"></textarea>
+            <label style="font-size:11px; color:#666; margin-top:4px; display:block;">自分用メモ</label>
+            <textarea id="add-memo" rows="2" placeholder="例: 〇〇の話題が好き"></textarea>
 
-            <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <div style="display: flex; gap: 6px; margin-top: 4px;">
               <div style="flex:1;">
-                <label class="field-label" style="margin-top:0;">来訪回数</label>
+                <label style="font-size:11px; color:#666;">来訪回数</label>
                 <input type="number" id="add-visit" value="1" min="1">
               </div>
               <div style="flex:1;">
-                <label class="field-label" style="margin-top:0;">コメント数</label>
+                <label style="font-size:11px; color:#666;">コメント数</label>
                 <input type="number" id="add-comment" value="1" min="1">
               </div>
             </div>
 
-            <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 10px;">登録する</button>
+            <button onclick="addManualUser()" class="add-btn" style="width: 100%; margin-top: 8px; padding: 6px;">登録する</button>
           </div>
         </div>
 
-        <h3 style="font-size: 0.95rem; margin-bottom: 8px;">登録済みリスナー一覧</h3>
+        <h3 style="font-size: 0.9rem; margin: 4px 0 6px 0;">登録済みリスナー一覧</h3>
         <div id="listener-cards-area">読み込み中...</div>
       </div>
     </div>
@@ -159,16 +152,16 @@
     <!-- ⚙️ タブ3: 音声発話ログ ＆ 設定エリア -->
     <div id="tab-settings-pane" class="tab-pane">
       <div class="card" style="background: #fff8e1; border: 1px solid #ffe0b2;">
-        <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">🔒 Gemini APIキーの設定</div>
+        <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">🔒 Gemini APIキーの設定</div>
         <input type="password" id="api-key-input" placeholder="AIzaSy... から始まるAPIキーを入力">
-        <button onclick="saveApiKey()" class="sec-btn" style="margin-top: 6px; width: auto; padding: 6px 12px;">キーを保存する</button>
-        <span id="key-status-text" style="margin-left: 8px; font-size: 12px; color: #28a745; font-weight: bold;"></span>
+        <button onclick="saveApiKey()" class="sec-btn" style="margin-top: 6px; width: auto; padding: 5px 10px; font-size: 12px;">キーを保存する</button>
+        <span id="key-status-text" style="margin-left: 8px; font-size: 11px; color: #28a745; font-weight: bold;"></span>
       </div>
 
       <div class="card">
-        <h4 style="margin: 0 0 5px 0; font-size: 0.85rem; color: #666;">リアルタイム発話ログ（音声認識の確認用）</h4>
-        <div id="transcript-box"></div>
-        <button onclick="analyzeSpeechWithGemini()" class="gray-btn" style="margin-top: 8px; font-size: 13px; padding: 6px;">▶ 今すぐAI判定をテスト実行</button>
+        <h4 style="margin: 0 0 5px 0; font-size: 0.8rem; color: #666;">リアルタイム発話ログ</h4>
+        <div id="transcript-box" style="height: 100px; overflow-y: scroll; background: #fafafa; border: 1px solid #ccc; padding: 6px; font-size: 11px; border-radius: 4px;"></div>
+        <button onclick="analyzeSpeechWithGemini()" class="gray-btn" style="margin-top: 6px; font-size: 12px; padding: 5px;">▶ 今すぐAI判定をテスト実行</button>
       </div>
     </div>
 
@@ -180,15 +173,15 @@
       <div class="modal-header" id="modal-user-name">ユーザー情報編集</div>
       <input type="hidden" id="modal-user-id">
       
-      <label class="field-label">フリガナ</label>
+      <label style="font-size:11px; color:#666;">フリガナ</label>
       <input type="text" id="modal-reading">
 
-      <label class="field-label">自分用メモ</label>
+      <label style="font-size:11px; color:#666; margin-top:6px; display:block;">自分用メモ</label>
       <textarea id="modal-memo" rows="3"></textarea>
 
-      <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;">
-        <button onclick="closeModal()" class="gray-btn" style="width: auto; padding: 6px 12px;">キャンセル</button>
-        <button onclick="saveUserMemo()" class="sec-btn" style="width: auto; padding: 6px 12px;">保存する</button>
+      <div style="margin-top: 10px; display: flex; justify-content: flex-end; gap: 6px;">
+        <button onclick="closeModal()" class="gray-btn" style="width: auto; padding: 5px 10px;">キャンセル</button>
+        <button onclick="saveUserMemo()" class="sec-btn" style="width: auto; padding: 5px 10px;">保存する</button>
       </div>
     </div>
   </div>
@@ -226,47 +219,30 @@
     let speechBuffer = [];
     let evalTimer = null;
 
-    // --- タブ切り替え関数 ---
     function switchTab(paneId) {
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(paneId).classList.add('active');
       event.currentTarget.classList.add('active');
-      
-      if (paneId === 'tab-listener-pane') {
-        loadListenerList();
-      }
+      if (paneId === 'tab-listener-pane') loadListenerList();
     }
 
-    // --- 手動登録フォームの折りたたみ開閉 ---
     function toggleAddForm() {
       const container = document.getElementById("manual-add-form-container");
-      if (container.style.display === "none") {
-        container.style.display = "block";
-      } else {
-        container.style.display = "none";
-      }
+      container.style.display = (container.style.display === "none") ? "block" : "none";
     }
 
-    // --- リアルタイム時計 ---
+    // --- 時計（時間のみのコンパクト表示） ---
     function updateClock() {
       const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
-      const week = daysOfWeek[now.getDay()];
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
-
-      document.getElementById("current-date").innerText = `${year}/${month}/${day} (${week})`;
       document.getElementById("current-time").innerText = `${hours}:${minutes}:${seconds}`;
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- Wake Lock ---
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
         try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
@@ -276,14 +252,13 @@
       if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
     });
 
-    // --- 認証 ---
     auth.onAuthStateChanged(user => {
       if (user) {
         document.getElementById("auth-card").style.display = "none";
         document.getElementById("app-content").style.display = "block";
       } else {
         document.getElementById("auth-card").style.display = "block";
-        document.getElementById("login-status").innerHTML = "アクセスするにはログインが必要です。";
+        document.getElementById("login-status").innerHTML = "ログインが必要です。";
         document.getElementById("login-btn").style.display = "inline-block";
         document.getElementById("app-content").style.display = "none";
       }
@@ -293,7 +268,6 @@
       auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(error => alert("ログイン失敗: " + error.message));
     }
 
-    // --- APIキー保存 ---
     window.addEventListener('DOMContentLoaded', () => {
       const savedKey = localStorage.getItem('gemini_api_key');
       if (savedKey) {
@@ -310,7 +284,6 @@
       alert("APIキーを保存しました。");
     }
 
-    // --- 音声モニタリング制御 ---
     function toggleMonitoring() {
       const savedKey = localStorage.getItem('gemini_api_key');
       if (!savedKey) {
@@ -362,9 +335,9 @@
       try {
         recognition.start();
         isMonitoring = true;
-        document.getElementById("toggle-btn").innerText = "音声モニタリングを停止する (マイクOFF)";
+        document.getElementById("toggle-btn").innerText = "音声モニタリング停止 (マイクOFF)";
         document.getElementById("toggle-btn").className = "btn-off";
-        updateAdviceBox("green", "🟢 トーク順調（モニタリング中）", "マイク稼働中です。このままお話しください。");
+        updateAdviceBox("green", "🟢 トーク順調", "マイク稼働中です。このままお話しください。");
         evalTimer = setInterval(analyzeSpeechWithGemini, EVALUATION_INTERVAL_SEC * 1000);
       } catch (err) {
         alert("マイク起動失敗: " + err.message);
@@ -375,18 +348,18 @@
       isMonitoring = false;
       if (recognition) { recognition.stop(); recognition = null; }
       if (evalTimer) { clearInterval(evalTimer); evalTimer = null; }
-      document.getElementById("toggle-btn").innerText = "音声モニタリングを開始する (マイクON)";
+      document.getElementById("toggle-btn").innerText = "音声モニタリング開始 (マイクON)";
       document.getElementById("toggle-btn").className = "btn-on";
-      updateAdviceBox("default", "💤 停止中", "開始ボタンを押すと、AIが音声コンディションをここに常時表示します。");
+      updateAdviceBox("default", "💤 停止中", "マイクONでAIコンディションを表示します。");
     }
 
     async function analyzeSpeechWithGemini() {
       const apiKey = localStorage.getItem('gemini_api_key');
-      if (!apiKey) { alert("APIキーが保存されていません。設定タブを確認してください。"); return; }
+      if (!apiKey) return;
 
       const textToAnalyze = speechBuffer.length > 0 ? speechBuffer.join("\n") : "[テスト発話] こんばんは、今日も配信の調子を確認しています。よろしくお願いします。";
       speechBuffer = [];
-      updateAdviceBox("default", "⏳ 分析中...", "AIが直近の発話をチェックしています...");
+      updateAdviceBox("default", "⏳ 分析中...", "AIが発話をチェックしています...");
 
       const prompt = `
 あなたはゲーム配信者のセルフコンディショニングAIアシスタントです。
@@ -421,21 +394,18 @@ ${textToAnalyze}
           } else {
             updateAdviceBox("green", "🟢 良好：トーク順調です！", resultText);
           }
-        } else {
-          throw new Error("AIからの応答形式エラー");
         }
       } catch (err) {
-        updateAdviceBox("red", "❌ エラー発生", err.message);
+        updateAdviceBox("red", "❌ エラー", err.message);
       }
     }
 
     function updateAdviceBox(type, title, text) {
       const box = document.getElementById("advice-box");
-      box.className = "advice-box ";
-      if (type === "green") box.className = "advice-box advice-green";
-      else if (type === "yellow") box.className = "advice-box advice-yellow";
-      else if (type === "red") box.className = "advice-box advice-red";
-      else box.className = "advice-box advice-default";
+      if (type === "green") box.className = "advice-green";
+      else if (type === "yellow") box.className = "advice-yellow";
+      else if (type === "red") box.className = "advice-red";
+      else box.className = "advice-default";
 
       box.innerHTML = `
         <div class="advice-title">${escapeHtml(title)}</div>
@@ -443,19 +413,16 @@ ${textToAnalyze}
       `;
     }
 
-    // --- 配信チャット監視関連 ---
-    async function startAutoMonitoring() {
-      runMonitoringById(MY_CHANNEL_ID);
-    }
+    async function startAutoMonitoring() { runMonitoringById(MY_CHANNEL_ID); }
 
     async function runMonitoringById(channelId) {
-      updateStatus("配信を自動検索中...");
+      updateStatus("検索中...");
       const liveVideoId = await getLiveVideoIdFromChannel(channelId);
       if (liveVideoId) {
         document.getElementById("videoId").value = liveVideoId;
         initMonitoring(liveVideoId);
       } else {
-        alert("現在ライブ配信中の枠が見つかりませんでした。");
+        alert("配信中の枠が見つかりませんでした。");
         updateStatus("待機中");
       }
     }
@@ -485,10 +452,10 @@ ${textToAnalyze}
 
     async function initMonitoring(videoId) {
       requestWakeLock();
-      updateStatus("LiveChatIDを取得中...");
+      updateStatus("LiveChatID取得中...");
       const liveChatId = await getLiveChatId(videoId);
       if (!liveChatId) {
-        alert("ライブチャットを取得できませんでした。配信中か確認してください。");
+        alert("チャットを取得できませんでした。");
         updateStatus("取得失敗");
         return;
       }
@@ -526,7 +493,6 @@ ${textToAnalyze}
       } catch (error) {}
     }
 
-    // 💬 ライブチャットにコメントを表示（来訪回数バッジ付き）
     async function displayComment(item) {
       const author = item.authorDetails.displayName;
       const userId = item.authorDetails.channelId;
@@ -549,19 +515,14 @@ ${textToAnalyze}
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
 
-      // データベースから来訪回数を取得してチャット欄にリアルタイム表示
       try {
         const userDoc = await db.collection('users').doc(userId).get();
         if (userDoc.exists) {
           const visitCount = userDoc.data().visitCount || 1;
           const badgeEl = document.getElementById(`visit-badge-${commentId}`);
-          if (badgeEl) {
-            badgeEl.innerText = `${visitCount}回目`;
-          }
+          if (badgeEl) badgeEl.innerText = `${visitCount}回目`;
         }
-      } catch (e) {
-        // 取得失敗時はバッジを非表示のままにする
-      }
+      } catch (e) {}
     }
 
     function getTimeAgo(date) {
@@ -618,7 +579,6 @@ ${textToAnalyze}
       } catch (err) {}
     }
 
-    // --- リスナー手動追加・管理 ---
     async function addManualUser() {
       const name = document.getElementById("add-name").value.trim();
       if (!name) { alert("名前を入力してください。"); return; }
@@ -639,7 +599,7 @@ ${textToAnalyze}
         document.getElementById("add-name").value = "";
         document.getElementById("add-reading").value = "";
         document.getElementById("add-memo").value = "";
-        toggleAddForm(); // 登録したらフォームを閉じる
+        toggleAddForm();
         loadListenerList();
       } catch (e) { alert("登録失敗: " + e.message); }
     }
