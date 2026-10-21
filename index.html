@@ -8,7 +8,7 @@
     body { font-family: sans-serif; margin: 8px; background: #f5f5f5; color: #333; }
     .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 8px; }
     
-    /* --- 1. 常時固定表示：音声モニタリングエリア（コンパクト化） --- */
+    /* --- 常時固定表示：音声モニタリング --- */
     .persistent-monitor { background: #fff; border: 2px solid #ccc; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     button { padding: 8px 12px; font-size: 13px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
     .btn-on { background: #28a745; color: white; }
@@ -25,7 +25,7 @@
     .advice-title { font-size: 0.95rem; font-weight: bold; margin-bottom: 2px; }
     .advice-text { font-size: 0.8rem; line-height: 1.2; }
 
-    /* --- 2. タブ切り替えメニュー --- */
+    /* --- タブ切り替えメニュー --- */
     .tab-menu { display: flex; gap: 4px; margin-bottom: 8px; }
     .tab-btn { flex: 1; padding: 7px 2px; font-size: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; text-align: center; font-weight: bold; }
     .tab-btn.active { background: #1a73e8; color: white; }
@@ -33,14 +33,13 @@
     .tab-pane { display: none; }
     .tab-pane.active { display: block; }
 
-    /* --- 3. コントロール＆時計の1行配置レイアウト --- */
+    /* --- コントロール＆時計 --- */
     .control-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
     .clock-badge { background: #1a73e8; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9rem; letter-spacing: 1px; white-space: nowrap; }
 
     .input-row { display: flex; gap: 6px; align-items: center; }
     input, textarea { padding: 6px; width: 100%; box-sizing: border-box; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
     
-    /* 🌟 コメント欄の高さを約420pxに拡大！ */
     #chat-box { background: white; border: 1px solid #ccc; padding: 8px; height: 420px; overflow-y: scroll; border-radius: 6px; margin-top: 6px; }
     
     .chat-item { border-bottom: 1px dotted #eee; padding: 5px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
@@ -71,7 +70,7 @@
     <button id="login-btn" onclick="loginWithGoogle()" style="display:none; background:#4285F4; margin-top:8px;">Googleでログイン</button>
   </div>
 
-  <!-- アプリメインコンテンツ（ログイン後表示） -->
+  <!-- アプリメインコンテンツ -->
   <div id="app-content">
 
     <!-- 🌟 上部固定：音声モニタリング -->
@@ -94,13 +93,11 @@
     <!-- 💬 タブ1: ライブチャット監視エリア -->
     <div id="tab-chat-pane" class="tab-pane active">
       <div class="card" style="padding: 8px;">
-        <!-- 🌟 ボタンと時計をコンパクトに1行化 -->
         <div class="control-row">
           <button onclick="startAutoMonitoring()" class="sec-btn" style="width: auto; flex-grow: 1; padding: 6px 10px;">配信検出</button>
           <div class="clock-badge" id="current-time">00:00:00</div>
         </div>
 
-        <!-- 🌟 ID指定と開始ボタンも1行でコンパクト化 -->
         <div class="input-row">
           <input type="text" id="videoId" placeholder="動画IDまたはURL">
           <button onclick="startManualMonitoring()" style="background:#333; color:white; width: 60px; padding: 6px;">開始</button>
@@ -108,7 +105,6 @@
         <div class="status" id="monitor-status" style="margin-top:2px;">待機中</div>
       </div>
 
-      <!-- 🌟 広くなったメインコメント表示枠 -->
       <div id="chat-box"></div>
     </div>
 
@@ -212,7 +208,7 @@
     const EVALUATION_INTERVAL_SEC = 60;
 
     let nextPageToken = "";
-    let intervalId = null;
+    let pollingTimer = null; // 🌟 定期実行タイマーを setTimeout 管理に変更
     let wakeLock = null;
     let isMonitoring = false;
     let recognition = null;
@@ -232,7 +228,6 @@
       container.style.display = (container.style.display === "none") ? "block" : "none";
     }
 
-    // --- 時計（時間のみのコンパクト表示） ---
     function updateClock() {
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -462,9 +457,12 @@ ${textToAnalyze}
       updateStatus(`監視中 (ID: ${videoId})`);
       document.getElementById("chat-box").innerHTML = "";
       nextPageToken = "";
+      
+      // 既存のタイマーがあればクリア
+      if (pollingTimer) clearTimeout(pollingTimer);
+      
+      // 初回実行 ＆ 動的ループ開始
       fetchChatMessages(liveChatId, videoId);
-      if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(() => fetchChatMessages(liveChatId, videoId), 5000);
     }
 
     async function getLiveChatId(videoId) {
@@ -477,12 +475,22 @@ ${textToAnalyze}
       return null;
     }
 
+    // 🌟 秘策1：YouTubeの推奨間隔(pollingIntervalMillis)に合わせて次に取得する時間を変える動的フェッチ
     async function fetchChatMessages(liveChatId, videoId) {
       let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${YOUTUBE_API_KEY}`;
       if (nextPageToken) url += `&pageToken=${nextPageToken}`;
+      
+      let nextInterval = 5000; // デフォルトのフォールバック（5秒）
+
       try {
         const res = await fetch(url);
         const data = await res.json();
+        
+        // YouTube側から「次の推奨インターバル（ミリ秒）」が指定されていればそれを採用
+        if (data.pollingIntervalMillis) {
+          nextInterval = data.pollingIntervalMillis;
+        }
+
         if (data.items && data.items.length > 0) {
           nextPageToken = data.nextPageToken;
           for (const item of data.items) {
@@ -490,7 +498,15 @@ ${textToAnalyze}
             await saveCommentAndUser(item, videoId);
           }
         }
-      } catch (error) {}
+      } catch (error) {
+        // エラー時は少し間隔を空けてリトライ（10秒）
+        nextInterval = 10000;
+      }
+
+      // 監視中であれば、YouTubeが指示してきた「次の秒数」に合わせてタイマーをセット
+      if (document.getElementById("monitor-status").innerText.includes("監視中")) {
+        pollingTimer = setTimeout(() => fetchChatMessages(liveChatId, videoId), nextInterval);
+      }
     }
 
     async function displayComment(item) {
