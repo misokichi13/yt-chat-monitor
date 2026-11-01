@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube Chat & Voice Monitor</title>
+  <title>YouTube Chat & Voice Monitor v2</title>
   <style>
     body { font-family: sans-serif; margin: 8px; background: #f5f5f5; color: #333; }
     .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 8px; }
-    
+
     /* --- 常時固定表示：音声モニタリング --- */
     .persistent-monitor { background: #fff; border: 2px solid #ccc; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     button { padding: 8px 12px; font-size: 13px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -39,15 +39,30 @@
 
     .input-row { display: flex; gap: 6px; align-items: center; }
     input, textarea { padding: 6px; width: 100%; box-sizing: border-box; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
-    
+
     #chat-box { background: white; border: 1px solid #ccc; padding: 8px; height: 420px; overflow-y: scroll; border-radius: 6px; margin-top: 6px; }
-    
+
     .chat-item { border-bottom: 1px dotted #eee; padding: 5px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: flex-start; }
     .chat-main { flex-grow: 1; }
     .author { font-weight: bold; color: #1a73e8; cursor: pointer; text-decoration: underline; }
     .visit-badge { font-size: 10px; color: #d97706; background: #fef3c7; padding: 1px 4px; border-radius: 3px; margin-left: 3px; font-weight: normal; }
     .time-ago { font-size: 10px; color: #888; white-space: nowrap; margin-left: 6px; }
     .status { font-size: 11px; color: #666; margin-top: 4px; }
+
+    /* --- v2追加：初見・初コメの強調と固定ストリップ --- */
+    .chat-item.first-ever { background: #ffeef0; }
+    .chat-item.first-stream { background: #fff8e1; }
+    .new-badge { color: #fff; background: #e0245e; font-weight: bold; }
+    .stream-badge { color: #7c4a03; background: #fde68a; font-weight: bold; }
+    #newcomer-strip { display: none; position: sticky; top: 6px; z-index: 5; background: #fff7ed; border: 2px solid #f59e0b; border-radius: 8px; padding: 6px 8px; margin-top: 6px; font-size: 12px; }
+    #newcomer-strip .strip-title { font-weight: bold; color: #b45309; margin-right: 4px; }
+    .newcomer-chip { display: inline-block; background: white; border: 1px solid #f59e0b; color: #92400e; border-radius: 999px; padding: 2px 8px; margin: 2px 2px 0 0; cursor: pointer; font-weight: bold; }
+    .newcomer-chip.ever { border-color: #e0245e; color: #be123c; }
+    .filter-row { display: flex; gap: 4px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+    .filter-btn { flex: 0 0 auto; width: auto; padding: 5px 10px; font-size: 12px; background: #e0e0e0; color: #333; }
+    .filter-btn.active { background: #1a73e8; color: white; }
+    .vibrate-label { font-size: 12px; color: #555; display: flex; align-items: center; gap: 3px; }
+    .vibrate-label input { width: auto; }
 
     /* リスナー一覧 */
     .listener-card { background: #fff; border: 1px solid #ddd; padding: 8px; border-radius: 6px; margin-bottom: 6px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; }
@@ -76,7 +91,7 @@
     <!-- 🌟 上部固定：音声モニタリング -->
     <div class="persistent-monitor">
       <button id="toggle-btn" class="btn-on" onclick="toggleMonitoring()">音声モニタリング開始 (マイクON)</button>
-      
+
       <div id="advice-box" class="advice-default">
         <div class="advice-title">💤 停止中</div>
         <div class="advice-text">マイクONでAIコンディションを表示します。</div>
@@ -85,9 +100,9 @@
 
     <!-- 📑 タブ切り替えボタン -->
     <div class="tab-menu">
-      <button class="tab-btn active" onclick="switchTab('tab-chat-pane')">💬 チャット</button>
-      <button class="tab-btn" onclick="switchTab('tab-listener-pane')">👥 リスナー</button>
-      <button class="tab-btn" onclick="switchTab('tab-settings-pane')">⚙️ 設定</button>
+      <button class="tab-btn active" onclick="switchTab('tab-chat-pane', this)">💬 チャット</button>
+      <button class="tab-btn" onclick="switchTab('tab-listener-pane', this)">👥 リスナー</button>
+      <button class="tab-btn" onclick="switchTab('tab-settings-pane', this)">⚙️ 設定</button>
     </div>
 
     <!-- 💬 タブ1: ライブチャット監視エリア -->
@@ -103,6 +118,17 @@
           <button onclick="startManualMonitoring()" style="background:#333; color:white; width: 60px; padding: 6px;">開始</button>
         </div>
         <div class="status" id="monitor-status" style="margin-top:2px;">待機中</div>
+        <div class="status">※「配信検出」は監視開始まで自動で行います。「開始」は動画IDを直接入力した時だけ使ってください。</div>
+      </div>
+
+      <!-- v2追加：今日の初見・初コメ固定ストリップ（スクロールしても消えない） -->
+      <div id="newcomer-strip"></div>
+
+      <!-- v2追加：絞り込み＆振動設定 -->
+      <div class="filter-row">
+        <button id="filter-all-btn" class="filter-btn active" onclick="setChatFilter('all')">すべて</button>
+        <button id="filter-first-btn" class="filter-btn" onclick="setChatFilter('first')">初見・初コメのみ</button>
+        <label class="vibrate-label"><input type="checkbox" id="vibrate-toggle" checked> 初見さんで振動</label>
       </div>
 
       <div id="chat-box"></div>
@@ -112,7 +138,7 @@
     <div id="tab-listener-pane" class="tab-pane">
       <div class="card">
         <button onclick="toggleAddForm()" class="gray-btn" style="width: 100%; margin-bottom: 8px; font-size: 12px; padding: 6px;">＋ リスナーを手動登録する</button>
-        
+
         <div id="manual-add-form-container" style="display: none;">
           <div class="add-form-box">
             <h4 style="margin: 0 0 6px 0; font-size: 0.85rem; color: #1a73e8;">手動登録フォーム</h4>
@@ -168,7 +194,7 @@
     <div class="modal-content">
       <div class="modal-header" id="modal-user-name">ユーザー情報編集</div>
       <input type="hidden" id="modal-user-id">
-      
+
       <label style="font-size:11px; color:#666;">フリガナ</label>
       <input type="text" id="modal-reading">
 
@@ -203,57 +229,79 @@
     const auth = firebase.auth();
 
     // 🌟 複数のYouTube APIキーを配列で管理（自動ローテーション対応）
+    // ※v2では実キーをファイルに残さない方針のためプレースホルダにしている。
+    //   運用時はここに自分のキー2本を入れること。
     const YOUTUBE_API_KEYS = [
-      "AIzaSyDKrF414aFaLZHMDyl5EB8k9gn9oH1-9rA", // 1つ目のAPIキー
-      "AIzaSyDBT7VvZsSKwyzXnQlN0ILCxnSA7h1JRgc"   // 2つ目のAPIキー
+      "YOUR_YOUTUBE_API_KEY_1",
+      "YOUR_YOUTUBE_API_KEY_2"
     ];
     let currentApiKeyIndex = 0;
+    // v2追加：制限に達したキーを記録し、無駄な試行をしない
+    const deadApiKeyIndexes = new Set();
+    // v2追加：このセッションの推定消費ユニット数（公式単価ベースの目安）
+    let sessionUnits = 0;
 
     // クォータ制限やエラー時に自動で次のキーに切り替えてYouTube APIを叩く共通関数
-    async function callYouTubeApi(baseUrlWithoutKey) {
+    // unitCost: そのメソッドの公式クォータ単価（チャット取得=5、検索=100、その他=1）
+    async function callYouTubeApi(baseUrlWithoutKey, unitCost = 1) {
       for (let attempt = 0; attempt < YOUTUBE_API_KEYS.length; attempt++) {
+        if (deadApiKeyIndexes.size >= YOUTUBE_API_KEYS.length) break;
+        if (deadApiKeyIndexes.has(currentApiKeyIndex)) {
+          currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+          continue;
+        }
         const apiKey = YOUTUBE_API_KEYS[currentApiKeyIndex];
         const separator = baseUrlWithoutKey.includes('?') ? '&' : '?';
         const url = `${baseUrlWithoutKey}${separator}key=${apiKey}`;
-        
+
         try {
+          sessionUnits += unitCost;
           const res = await fetch(url);
           const data = await res.json();
-          
+
           if (data.error) {
             const reason = data.error.errors?.[0]?.reason;
-            // クォータ制限（上限到達）の場合は自動で次のキーに切り替え
+            // クォータ制限（上限到達）の場合はそのキーを停止し、次のキーへ切り替え
             if (data.error.code === 403 || reason === 'quotaExceeded' || reason === 'dailyLimitExceeded' || reason === 'rateLimitExceeded') {
               console.warn(`APIキー [Index: ${currentApiKeyIndex}] が制限に達しました。次のキーへ切り替えます。`);
+              deadApiKeyIndexes.add(currentApiKeyIndex);
               currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
-              continue; 
+              continue;
             }
           }
-          return data; 
+          return data;
         } catch (err) {
           if (attempt === YOUTUBE_API_KEYS.length - 1) throw err;
         }
       }
-      throw new Error("すべてのYouTube APIキーが制限に達しました。");
+      throw new Error("QUOTA_EXHAUSTED_ALL");
     }
 
-    const MY_CHANNEL_ID = "UCwta9DQxsI-A1sVF3SWNHfg"; 
+    const MY_CHANNEL_ID = "UCwta9DQxsI-A1sVF3SWNHfg";
     const GEMINI_MODEL = "gemini-3.8-flash";
     const EVALUATION_INTERVAL_SEC = 60;
 
     let nextPageToken = "";
-    let pollingTimer = null; 
+    let pollingTimer = null;
     let wakeLock = null;
     let isMonitoring = false;
     let recognition = null;
     let speechBuffer = [];
     let evalTimer = null;
 
-    function switchTab(paneId) {
+    // v2追加：適応ポーリングと初見管理の状態
+    let lastActivityAt = Date.now();   // 最後にコメントが来た時刻
+    let currentFloorSec = 10;          // 現在の最小取得間隔（秒）
+    let monitoringStoppedByQuota = false;
+    let newcomers = [];                // この配信の初見・初コメ {userId, name, type}
+    let chatFilter = 'all';            // 'all' | 'first'
+    let monitoringRunId = 0;           // v2.1追加：監視の実行ID（二重起動による多重ポーリング防止）
+
+    function switchTab(paneId, btn) {
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(paneId).classList.add('active');
-      event.currentTarget.classList.add('active');
+      if (btn) btn.classList.add('active');
       if (paneId === 'tab-listener-pane') loadListenerList();
     }
 
@@ -459,7 +507,7 @@ ${textToAnalyze}
     async function getLiveVideoIdFromChannel(channelId) {
       const base = `https://www.googleapis.com/youtube/v3/search?part=id&channelId=${channelId}&eventType=live&type=video`;
       try {
-        const data = await callYouTubeApi(base);
+        const data = await callYouTubeApi(base, 100);
         if (data.items && data.items.length > 0) return data.items[0].id.videoId;
       } catch (e) {}
       return null;
@@ -487,84 +535,165 @@ ${textToAnalyze}
         updateStatus("取得失敗");
         return;
       }
+      // v2追加：配信ごとに状態を初期化する
+      sessionUnits = 0;
+      lastActivityAt = Date.now();
+      currentFloorSec = 10;
+      monitoringStoppedByQuota = false;
+      newcomers = [];
+      renderNewcomerStrip();
       updateStatus(`監視中 (ID: ${videoId})`);
       document.getElementById("chat-box").innerHTML = "";
       nextPageToken = "";
-      
+
       if (pollingTimer) clearTimeout(pollingTimer);
-      fetchChatMessages(liveChatId, videoId);
+      // v2.1追加：実行IDを進めることで、前の監視の残り処理（取得中だった分）を無効化する
+      const myRunId = ++monitoringRunId;
+      fetchChatMessages(liveChatId, videoId, myRunId);
     }
 
     async function getLiveChatId(videoId) {
       const base = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}`;
       try {
-        const data = await callYouTubeApi(base);
+        const data = await callYouTubeApi(base, 1);
         if (data.items && data.items.length > 0) return data.items[0].liveStreamingDetails?.activeLiveChatId || null;
       } catch (e) {}
       return null;
     }
 
-    // 🌟 動的フェッチ（最短10秒制限 ＋ APIキー自動ローテーション対応）
-    async function fetchChatMessages(liveChatId, videoId) {
+    // 🌟 v2：適応型ポーリング
+    // コメントが来ている間は最短10秒、無言が続くと間隔を広げて消費を抑える。
+    // 全キーが制限に達したら、叩き続けずに停止する。
+    async function fetchChatMessages(liveChatId, videoId, runId) {
+      // v2.1追加：古い監視の処理なら何もしない（二重起動でポーリングが増殖するのを防ぐ）
+      if (runId !== monitoringRunId) return;
+      if (monitoringStoppedByQuota) return;
       let base = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails`;
       if (nextPageToken) base += `&pageToken=${nextPageToken}`;
-      
-      let nextInterval = 10000; // デフォルト10秒
+
+      let nextInterval = currentFloorSec * 1000;
 
       try {
-        const data = await callYouTubeApi(base);
-        
-        if (data.pollingIntervalMillis) {
-          nextInterval = Math.max(data.pollingIntervalMillis, 10000);
-        }
+        const data = await callYouTubeApi(base, 5);
+        if (runId !== monitoringRunId) return;
 
         if (data.items && data.items.length > 0) {
           nextPageToken = data.nextPageToken;
+          lastActivityAt = Date.now();
+          currentFloorSec = 10;
+          // v2変更：保存→表示の順にし、保存結果（初見/初コメ/回数）を使って描画する
           for (const item of data.items) {
-            displayComment(item);
-            await saveCommentAndUser(item, videoId);
+            const info = await saveCommentAndUser(item, videoId);
+            displayComment(item, info);
           }
+        } else {
+          // 無言の経過時間に応じて間隔を広げる（3分→20秒、10分→45秒）
+          const idleMin = (Date.now() - lastActivityAt) / 60000;
+          currentFloorSec = idleMin >= 10 ? 45 : idleMin >= 3 ? 20 : 10;
         }
+
+        const serverSec = data.pollingIntervalMillis ? data.pollingIntervalMillis / 1000 : 10;
+        nextInterval = Math.max(serverSec, currentFloorSec) * 1000;
+        updateStatus(`監視中 (ID: ${videoId}) / 間隔${Math.round(nextInterval / 1000)}秒 / 推定消費 約${sessionUnits}ユニット`);
       } catch (error) {
-        nextInterval = 15000;
-        updateStatus("取得エラー（再試行中...）");
+        if (error && error.message === "QUOTA_EXHAUSTED_ALL") {
+          monitoringStoppedByQuota = true;
+          updateStatus("API制限に達したため停止中（リセットは太平洋時間の深夜です。再開はページ再読み込み）");
+          return;
+        }
+        nextInterval = 30000;
+        updateStatus("取得エラー（30秒後に再試行...）");
       }
 
-      if (document.getElementById("monitor-status").innerText.includes("監視中")) {
-        pollingTimer = setTimeout(() => fetchChatMessages(liveChatId, videoId), nextInterval);
+      if (runId === monitoringRunId && document.getElementById("monitor-status").innerText.includes("監視中")) {
+        pollingTimer = setTimeout(() => fetchChatMessages(liveChatId, videoId, runId), nextInterval);
       }
     }
 
-    async function displayComment(item) {
+    // v2変更：表示は保存結果 info を受け取って描画する（追加のFirestore読み取りなし）
+    function displayComment(item, info) {
       const author = item.authorDetails.displayName;
       const userId = item.authorDetails.channelId;
       const message = item.snippet.displayMessage;
       const publishedAt = new Date(item.snippet.publishedAt);
-      const commentId = item.id;
 
+      info = info || {};
       const chatBox = document.getElementById("chat-box");
       const div = document.createElement("div");
       div.className = "chat-item";
-      
+
+      let badgeHtml = "";
+      let firstType = "";
+      if (info.isNewUser) {
+        div.classList.add("first-ever");
+        badgeHtml = `<span class="visit-badge new-badge">初見さん</span>`;
+        firstType = "ever";
+      } else if (info.isFirstInStream) {
+        div.classList.add("first-stream");
+        badgeHtml = `<span class="visit-badge stream-badge">今日初コメ</span>`;
+        firstType = "stream";
+      } else if (info.visitCount && info.visitCount > 1) {
+        badgeHtml = `<span class="visit-badge">${info.visitCount}回目</span>`;
+      }
+      div.dataset.first = firstType;
+
       div.innerHTML = `
         <div class="chat-main">
           <span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}</span>
-          <span id="visit-badge-${commentId}" class="visit-badge"></span>: 
+          ${badgeHtml}:
           ${escapeHtml(message)}
         </div>
         <div class="time-ago" data-time="${publishedAt.getTime()}">${getTimeAgo(publishedAt)}</div>
       `;
       chatBox.appendChild(div);
+      applyFilterToItem(div);
       chatBox.scrollTop = chatBox.scrollHeight;
 
-      try {
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (userDoc.exists) {
-          const visitCount = userDoc.data().visitCount || 1;
-          const badgeEl = document.getElementById(`visit-badge-${commentId}`);
-          if (badgeEl) badgeEl.innerText = `${visitCount}回目`;
+      // 初見・初コメは固定ストリップへ登録し、初見さんは振動でも知らせる
+      if (firstType) {
+        registerNewcomer(userId, author, firstType);
+        if (firstType === "ever") {
+          const vib = document.getElementById("vibrate-toggle");
+          if (vib && vib.checked && navigator.vibrate) navigator.vibrate([70, 40, 70]);
         }
-      } catch (e) {}
+      }
+    }
+
+    // v2追加：固定ストリップ（今日の初見・初コメ）
+    function registerNewcomer(userId, name, type) {
+      if (newcomers.some(n => n.userId === userId)) return;
+      newcomers.push({ userId: userId, name: name, type: type });
+      renderNewcomerStrip();
+    }
+
+    function renderNewcomerStrip() {
+      const strip = document.getElementById("newcomer-strip");
+      if (!newcomers || newcomers.length === 0) {
+        strip.style.display = "none";
+        strip.innerHTML = "";
+        return;
+      }
+      strip.style.display = "block";
+      const chips = newcomers.map(n =>
+        `<span class="newcomer-chip ${n.type === 'ever' ? 'ever' : ''}" onclick="openModal('${n.userId}', '${escapeHtml(n.name)}')">${n.type === 'ever' ? '🌟' : '☀️'} ${escapeHtml(n.name)}</span>`
+      ).join('');
+      strip.innerHTML = `<span class="strip-title">今日の初見・初コメ:</span>${chips}`;
+    }
+
+    // v2追加：絞り込み表示
+    function setChatFilter(mode) {
+      chatFilter = mode;
+      document.getElementById("filter-all-btn").classList.toggle("active", mode === 'all');
+      document.getElementById("filter-first-btn").classList.toggle("active", mode === 'first');
+      document.querySelectorAll('#chat-box .chat-item').forEach(applyFilterToItem);
+    }
+
+    function applyFilterToItem(div) {
+      if (chatFilter === 'first') {
+        div.style.display = div.dataset.first ? '' : 'none';
+      } else {
+        div.style.display = '';
+      }
     }
 
     function getTimeAgo(date) {
@@ -585,107 +714,159 @@ ${textToAnalyze}
       });
     }, 10000);
 
+    // v2変更：保存結果 { isNewUser, isFirstInStream, visitCount } を返す。
+    // コメント保存にも初見/初コメフラグを残す（将来のOBS表示ページが同じデータを使えるように）。
     async function saveCommentAndUser(item, videoId) {
-      try {
-        const author = item.authorDetails;
-        const userId = author.channelId;
-        const userName = author.displayName;
-        const userRef = db.collection('users').doc(userId);
-        const userDoc = await userRef.get();
+      const userId = item.authorDetails.channelId;
+      const userName = item.authorDetails.displayName;
+      const photoUrl = item.authorDetails.profileImageUrl || "";
+      const messageText = item.snippet.displayMessage;
+      const publishedAt = new Date(item.snippet.publishedAt);
 
-        let updateData = {
-          name: userName,
-          icon: author.profileImageUrl,
-          lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
-          commentCount: firebase.firestore.FieldValue.increment(1)
-        };
+      const info = { isNewUser: false, isFirstInStream: false, visitCount: 1 };
+
+      try {
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+        const now = firebase.firestore.FieldValue.serverTimestamp();
 
         if (!userDoc.exists) {
-          updateData.firstSeenAt = firebase.firestore.FieldValue.serverTimestamp();
-          updateData.visitCount = 1;
-          updateData.visitedVideos = [videoId];
-          updateData.reading = "";
-          updateData.memo = "";
+          info.isNewUser = true;
+          info.isFirstInStream = true;
+          info.visitCount = 1;
+          await userRef.set({
+            name: userName,
+            photoUrl: photoUrl,
+            reading: "",
+            memo: "",
+            firstSeenVideoId: videoId,
+            lastSeenVideoId: videoId,
+            firstSeenAt: publishedAt,
+            lastSeenAt: publishedAt,
+            visitCount: 1,
+            commentCount: 1,
+            visitedVideos: [videoId]
+          });
         } else {
-          const visitedVideos = userDoc.data().visitedVideos || [];
-          if (!visitedVideos.includes(videoId)) {
+          const data = userDoc.data();
+          const visitedVideos = data.visitedVideos || [];
+          const alreadyVisited = visitedVideos.includes(videoId);
+          info.isFirstInStream = !alreadyVisited;
+          info.visitCount = (data.visitCount || 1) + (alreadyVisited ? 0 : 1);
+
+          let updateData = {
+            name: userName,
+            photoUrl: photoUrl,
+            lastSeenVideoId: videoId,
+            lastSeenAt: publishedAt,
+            commentCount: firebase.firestore.FieldValue.increment(1)
+          };
+          if (!alreadyVisited) {
             updateData.visitCount = firebase.firestore.FieldValue.increment(1);
             updateData.visitedVideos = firebase.firestore.FieldValue.arrayUnion(videoId);
           }
+          await userRef.update(updateData);
         }
-        await userRef.set(updateData, { merge: true });
-        await db.collection('comments').doc(item.id).set({
-          userId: userId, userName: userName, message: item.snippet.displayMessage || "",
-          createdAt: new Date(item.snippet.publishedAt), videoId: videoId
+
+        await db.collection("comments").add({
+          userId: userId,
+          userName: userName,
+          message: messageText,
+          videoId: videoId,
+          createdAt: publishedAt,
+          isFirstEver: info.isNewUser,
+          isFirstInStream: info.isFirstInStream
         });
-      } catch (err) {}
+      } catch (e) {
+        console.error("Save Error:", e);
+      }
+      return info;
     }
 
     async function addManualUser() {
       const name = document.getElementById("add-name").value.trim();
       if (!name) { alert("名前を入力してください。"); return; }
-      const manualUserId = "manual_" + Date.now();
+
+      const reading = document.getElementById("add-reading").value.trim();
+      const memo = document.getElementById("add-memo").value.trim();
+      const visitCount = parseInt(document.getElementById("add-visit").value) || 1;
+      const commentCount = parseInt(document.getElementById("add-comment").value) || 1;
+
       try {
-        await db.collection('users').doc(manualUserId).set({
+        const manualId = "manual_" + Date.now();
+        await db.collection("users").doc(manualId).set({
           name: name,
-          reading: document.getElementById("add-reading").value.trim(),
-          memo: document.getElementById("add-memo").value.trim(),
-          visitCount: parseInt(document.getElementById("add-visit").value) || 1,
-          commentCount: parseInt(document.getElementById("add-comment").value) || 1,
-          icon: "",
-          firstSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
-          lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+          photoUrl: "",
+          reading: reading,
+          memo: memo,
+          firstSeenVideoId: "",
+          lastSeenVideoId: "",
+          firstSeenAt: new Date(),
+          lastSeenAt: new Date(),
+          visitCount: visitCount,
+          commentCount: commentCount,
           visitedVideos: []
         });
-        alert(`${name} さんを登録しました！`);
+        alert("登録しました！");
         document.getElementById("add-name").value = "";
         document.getElementById("add-reading").value = "";
         document.getElementById("add-memo").value = "";
-        toggleAddForm();
+        document.getElementById("add-visit").value = "1";
+        document.getElementById("add-comment").value = "1";
         loadListenerList();
-      } catch (e) { alert("登録失敗: " + e.message); }
+      } catch (e) {
+        console.error(e);
+        alert("登録に失敗しました。");
+      }
     }
 
     async function loadListenerList() {
       const area = document.getElementById("listener-cards-area");
       area.innerHTML = "読み込み中...";
       try {
-        const snapshot = await db.collection('users').orderBy('lastSeenAt', 'desc').limit(50).get();
-        if (snapshot.empty) { area.innerHTML = "データがありません。"; return; }
-        let html = "";
+        const snapshot = await db.collection("users").orderBy("lastSeenAt", "desc").limit(50).get();
+        if (snapshot.empty) {
+          area.innerHTML = "登録済みリスナーはいません。";
+          return;
+        }
+        area.innerHTML = "";
         snapshot.forEach(doc => {
-          const u = doc.data();
-          const visitCount = u.visitCount || 0;
-          const commentCount = u.commentCount || 0;
-
-          html += `
-            <div class="listener-card">
-              <img src="${u.icon || 'https://via.placeholder.com/32'}" class="listener-avatar" alt="">
-              <div class="listener-info">
-                <div style="font-weight: bold;">${escapeHtml(u.name || '')} <span style="color:#666; font-size:11px;">(${escapeHtml(u.reading || '')})</span></div>
-                <div style="color:#444; font-size:11px;">メモ: ${escapeHtml(u.memo || 'なし')}</div>
-                <div style="color:#888; font-size:10px; margin-top:2px;">来訪: ${visitCount}回 / コメント: ${commentCount}回</div>
+          const data = doc.data();
+          const photoHtml = data.photoUrl ? `<img src="${data.photoUrl}" class="listener-avatar">` : `<div class="listener-avatar" style="background:#eee; display:flex; align-items:center; justify-content:center; font-size:14px;">👤</div>`;
+          const readingText = data.reading ? ` (${escapeHtml(data.reading)})` : "";
+          const lastDate = data.lastSeenAt?.toDate ? data.lastSeenAt.toDate().toLocaleDateString() : "";
+          const div = document.createElement("div");
+          div.className = "listener-card";
+          div.innerHTML = `
+            ${photoHtml}
+            <div class="listener-info" onclick="openModal('${doc.id}', '${escapeHtml(data.name)}')">
+              <strong>${escapeHtml(data.name)}${readingText}</strong>
+              <div style="color:#666; font-size: 11px; margin-top: 2px;">
+                来訪: ${data.visitCount || 1}回 / コメ: ${data.commentCount || 0}回 | 最終: ${lastDate}
               </div>
-              <button onclick="openModal('${doc.id}', '${escapeHtml(u.name || '').replace(/'/g, "\\'")}')" class="sec-btn" style="padding:4px 8px; font-size:11px; width:auto;">編集</button>
+              ${data.memo ? `<div style="color:#555; font-size:11px;">📝 ${escapeHtml(data.memo)}</div>` : ''}
             </div>
+            <button onclick="openModal('${doc.id}', '${escapeHtml(data.name)}')" style="background:#eee; width: auto; padding: 4px 8px; font-size: 11px;">編集</button>
           `;
+          area.appendChild(div);
         });
-        area.innerHTML = html;
-      } catch (e) { area.innerHTML = "取得失敗"; }
+      } catch (e) {
+        area.innerHTML = "一覧の読み込みに失敗しました。";
+      }
     }
 
     async function openModal(userId, userName) {
       document.getElementById("modal-user-id").value = userId;
-      document.getElementById("modal-user-name").innerText = userName + " の編集";
-      document.getElementById("modal-reading").value = "";
-      document.getElementById("modal-memo").value = "";
+      document.getElementById("modal-user-name").innerText = userName;
+
       try {
-        const doc = await db.collection('users').doc(userId).get();
+        const doc = await db.collection("users").doc(userId).get();
         if (doc.exists) {
-          document.getElementById("modal-reading").value = doc.data().reading || "";
-          document.getElementById("modal-memo").value = doc.data().memo || "";
+          const data = doc.data();
+          document.getElementById("modal-reading").value = data.reading || "";
+          document.getElementById("modal-memo").value = data.memo || "";
         }
-      } catch (e) {}
+      } catch(e) {}
       document.getElementById("edit-modal").style.display = "flex";
     }
 
@@ -694,19 +875,24 @@ ${textToAnalyze}
     async function saveUserMemo() {
       const userId = document.getElementById("modal-user-id").value;
       if (!userId) return;
+      const reading = document.getElementById("modal-reading").value.trim();
+      const memo = document.getElementById("modal-memo").value.trim();
       try {
-        await db.collection('users').doc(userId).update({
-          reading: document.getElementById("modal-reading").value,
-          memo: document.getElementById("modal-memo").value
-        });
+        await db.collection("users").doc(userId).update({ reading: reading, memo: memo });
         alert("保存しました！");
         closeModal();
         loadListenerList();
-      } catch (e) { alert("保存失敗"); }
+      } catch (e) { alert("保存失敗: " + e.message); }
     }
 
-    function updateStatus(msg) { document.getElementById("monitor-status").innerText = "ステータス: " + msg; }
-    function escapeHtml(str) { return str.replace(/[&'`<>"]/g, m => ({'&':'&amp;','\'':'&#x27;','`':'&#x60;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+    function updateStatus(msg) { document.getElementById("monitor-status").innerText = msg; }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return str.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
   </script>
 </body>
 </html>
