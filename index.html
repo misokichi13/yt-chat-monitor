@@ -118,7 +118,7 @@
           <button onclick="startManualMonitoring()" style="background:#333; color:white; width: 60px; padding: 6px;">開始</button>
         </div>
         <div class="status" id="monitor-status" style="margin-top:2px;">待機中</div>
-        <div class="status">※「配信検出」は監視開始まで自動で行います。「開始」は動画IDを直接入力した時だけ使ってください。</div>
+        <div class="status">※「配信検出」は監視開始まで自動で行います。「開始」は動画IDを直接入力した時だけ使ってください。<br>※v2.2：初回のみ⚙️設定タブでYouTube APIキーの登録が必要です。</div>
       </div>
 
       <!-- v2追加：今日の初見・初コメ固定ストリップ（スクロールしても消えない） -->
@@ -173,6 +173,14 @@
 
     <!-- ⚙️ タブ3: 音声発話ログ ＆ 設定エリア -->
     <div id="tab-settings-pane" class="tab-pane">
+      <div class="card" style="background: #e8f5e9; border: 1px solid #a5d6a7;">
+        <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">🔑 YouTube APIキーの設定（配信検出・コメント取得に必須）</div>
+        <div style="font-size: 11px; color: #555; margin-bottom: 4px;">キーを1行に1つずつ入力してください（2本まで）。キーはこのブラウザ内にだけ保存され、ファイル自体には残りません。</div>
+        <textarea id="yt-keys-input" rows="2" placeholder="AIza... から始まるAPIキー（1行に1つ）" style="width: 100%; box-sizing: border-box;"></textarea>
+        <button onclick="saveYouTubeKeys()" class="sec-btn" style="margin-top: 6px; width: auto; padding: 5px 10px; font-size: 12px;">キーを保存する</button>
+        <span id="yt-key-status-text" style="margin-left: 8px; font-size: 11px; color: #28a745; font-weight: bold;"></span>
+      </div>
+
       <div class="card" style="background: #fff8e1; border: 1px solid #ffe0b2;">
         <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">🔒 Gemini APIキーの設定</div>
         <input type="password" id="api-key-input" placeholder="AIzaSy... から始まるAPIキーを入力">
@@ -231,10 +239,14 @@
     // 🌟 複数のYouTube APIキーを配列で管理（自動ローテーション対応）
     // ※v2では実キーをファイルに残さない方針のためプレースホルダにしている。
     //   運用時はここに自分のキー2本を入れること。
-    const YOUTUBE_API_KEYS = [
-      "YOUR_YOUTUBE_API_KEY_1",
-      "YOUR_YOUTUBE_API_KEY_2"
-    ];
+    // v2.2変更：キーはファイルに書かず、設定タブで入力してこのブラウザのlocalStorageに保存する
+    let YOUTUBE_API_KEYS = [];
+    try {
+      const savedYtKeys = JSON.parse(localStorage.getItem('youtube_api_keys') || '[]');
+      if (Array.isArray(savedYtKeys)) YOUTUBE_API_KEYS = savedYtKeys.filter(k => typeof k === 'string' && k.trim()).map(k => k.trim());
+    } catch (e) { YOUTUBE_API_KEYS = []; }
+    // v2.2追加：最後に起きたAPIエラー（「見つからなかった」と「エラー」を区別して表示するため）
+    let lastApiError = null;
     let currentApiKeyIndex = 0;
     // v2追加：制限に達したキーを記録し、無駄な試行をしない
     const deadApiKeyIndexes = new Set();
@@ -261,6 +273,7 @@
 
           if (data.error) {
             const reason = data.error.errors?.[0]?.reason;
+            lastApiError = (data.error.message || 'APIエラー') + (reason ? ` [${reason}]` : '');
             // クォータ制限（上限到達）の場合はそのキーを停止し、次のキーへ切り替え
             if (data.error.code === 403 || reason === 'quotaExceeded' || reason === 'dailyLimitExceeded' || reason === 'rateLimitExceeded') {
               console.warn(`APIキー [Index: ${currentApiKeyIndex}] が制限に達しました。次のキーへ切り替えます。`);
@@ -268,7 +281,9 @@
               currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
               continue;
             }
+            return data;
           }
+          lastApiError = null;
           return data;
         } catch (err) {
           if (attempt === YOUTUBE_API_KEYS.length - 1) throw err;
@@ -351,7 +366,29 @@
         document.getElementById('api-key-input').value = savedKey;
         document.getElementById('key-status-text').innerText = "✓ 保存済み";
       }
+      // v2.2追加：YouTubeキーの保存状態を設定欄に表示する
+      const ytStatusEl = document.getElementById('yt-key-status-text');
+      if (YOUTUBE_API_KEYS.length) {
+        document.getElementById('yt-keys-input').value = YOUTUBE_API_KEYS.join('\n');
+        ytStatusEl.innerText = "✓ 保存済み（" + YOUTUBE_API_KEYS.length + "本）";
+      } else {
+        ytStatusEl.innerText = "⚠ 未設定（配信検出にはキーが必要です）";
+        ytStatusEl.style.color = "#d32f2f";
+      }
     });
+
+    function saveYouTubeKeys() {
+      const keys = document.getElementById('yt-keys-input').value.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!keys.length) { alert("YouTube APIキーを入力してください。"); return; }
+      localStorage.setItem('youtube_api_keys', JSON.stringify(keys));
+      YOUTUBE_API_KEYS = keys;
+      deadApiKeyIndexes.clear();
+      currentApiKeyIndex = 0;
+      const ytStatusEl = document.getElementById('yt-key-status-text');
+      ytStatusEl.innerText = "✓ 保存しました（" + keys.length + "本）";
+      ytStatusEl.style.color = "#28a745";
+      alert("YouTube APIキーを保存しました。");
+    }
 
     function saveApiKey() {
       const key = document.getElementById('api-key-input').value.trim();
@@ -493,11 +530,20 @@ ${textToAnalyze}
     async function startAutoMonitoring() { runMonitoringById(MY_CHANNEL_ID); }
 
     async function runMonitoringById(channelId) {
+      // v2.2追加：キーが未設定なら、そのことが分かる表示にする（「見つかりません」と誤表示しない）
+      if (!YOUTUBE_API_KEYS.length) {
+        alert("YouTube APIキーが未設定です。⚙️設定タブでキーを登録してから「配信検出」を押してください。");
+        updateStatus("APIキー未設定");
+        return;
+      }
       updateStatus("検索中...");
       const liveVideoId = await getLiveVideoIdFromChannel(channelId);
       if (liveVideoId) {
         document.getElementById("videoId").value = liveVideoId;
         initMonitoring(liveVideoId);
+      } else if (lastApiError) {
+        alert("APIエラーで検出できませんでした。\n" + lastApiError);
+        updateStatus("APIエラー: " + lastApiError);
       } else {
         alert("配信中の枠が見つかりませんでした。");
         updateStatus("待機中");
@@ -505,6 +551,12 @@ ${textToAnalyze}
     }
 
     async function getLiveVideoIdFromChannel(channelId) {
+      // v2.2変更：まず「アップロード済み動画リスト」から配信中を探す（消費1+1ユニット。検索方式より速く確実）
+      try {
+        const liveId = await getLiveVideoIdFromUploads(channelId);
+        if (liveId) return liveId;
+      } catch (e) {}
+      // 見つからなければ従来の検索方式でも確認する（100ユニット）
       const base = `https://www.googleapis.com/youtube/v3/search?part=id&channelId=${channelId}&eventType=live&type=video`;
       try {
         const data = await callYouTubeApi(base, 100);
@@ -513,7 +565,25 @@ ${textToAnalyze}
       return null;
     }
 
+    // v2.2追加：チャンネルのアップロード一覧（新しい順）から、現在配信中の動画を探す
+    async function getLiveVideoIdFromUploads(channelId) {
+      const uploadsId = 'UU' + channelId.slice(2);
+      const pl = await callYouTubeApi(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsId}&maxResults=5`, 1);
+      const ids = (pl.items || []).map(i => i.contentDetails?.videoId).filter(Boolean);
+      if (!ids.length) return null;
+      const vd = await callYouTubeApi(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${ids.join(',')}`, 1);
+      for (const v of (vd.items || [])) {
+        if (v.snippet?.liveBroadcastContent === 'live') return v.id;
+      }
+      return null;
+    }
+
     async function startManualMonitoring() {
+      if (!YOUTUBE_API_KEYS.length) {
+        alert("YouTube APIキーが未設定です。⚙️設定タブでキーを登録してください。");
+        updateStatus("APIキー未設定");
+        return;
+      }
       let inputVal = document.getElementById("videoId").value.trim();
       if (!inputVal) { alert("動画IDまたはURLを入力してください"); return; }
       let videoId = inputVal;
@@ -531,8 +601,8 @@ ${textToAnalyze}
       updateStatus("LiveChatID取得中...");
       const liveChatId = await getLiveChatId(videoId);
       if (!liveChatId) {
-        alert("チャットを取得できませんでした。");
-        updateStatus("取得失敗");
+        alert(lastApiError ? ("チャットを取得できませんでした。\nAPIエラー: " + lastApiError) : "チャットを取得できませんでした。");
+        updateStatus(lastApiError ? ("APIエラー: " + lastApiError) : "取得失敗");
         return;
       }
       // v2追加：配信ごとに状態を初期化する
@@ -577,7 +647,11 @@ ${textToAnalyze}
         const data = await callYouTubeApi(base, 5);
         if (runId !== monitoringRunId) return;
 
-        if (data.items && data.items.length > 0) {
+        if (data.error) {
+          // v2.2追加：APIエラーを「無言」と誤認せず、内容を表示して30秒後に再試行する
+          nextInterval = 30000;
+          updateStatus(`監視中 (ID: ${videoId}) / APIエラー: ${lastApiError || '不明'}（30秒後に再試行）`);
+        } else if (data.items && data.items.length > 0) {
           nextPageToken = data.nextPageToken;
           lastActivityAt = Date.now();
           currentFloorSec = 10;
@@ -592,9 +666,11 @@ ${textToAnalyze}
           currentFloorSec = idleMin >= 10 ? 45 : idleMin >= 3 ? 20 : 10;
         }
 
-        const serverSec = data.pollingIntervalMillis ? data.pollingIntervalMillis / 1000 : 10;
-        nextInterval = Math.max(serverSec, currentFloorSec) * 1000;
-        updateStatus(`監視中 (ID: ${videoId}) / 間隔${Math.round(nextInterval / 1000)}秒 / 推定消費 約${sessionUnits}ユニット`);
+        if (!data.error) {
+          const serverSec = data.pollingIntervalMillis ? data.pollingIntervalMillis / 1000 : 10;
+          nextInterval = Math.max(serverSec, currentFloorSec) * 1000;
+          updateStatus(`監視中 (ID: ${videoId}) / 間隔${Math.round(nextInterval / 1000)}秒 / 推定消費 約${sessionUnits}ユニット`);
+        }
       } catch (error) {
         if (error && error.message === "QUOTA_EXHAUSTED_ALL") {
           monitoringStoppedByQuota = true;
@@ -605,7 +681,7 @@ ${textToAnalyze}
         updateStatus("取得エラー（30秒後に再試行...）");
       }
 
-      if (runId === monitoringRunId && document.getElementById("monitor-status").innerText.includes("監視中")) {
+      if (runId === monitoringRunId && (document.getElementById("monitor-status").innerText.includes("監視中") || document.getElementById("monitor-status").innerText.includes("取得エラー"))) {
         pollingTimer = setTimeout(() => fetchChatMessages(liveChatId, videoId, runId), nextInterval);
       }
     }
