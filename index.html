@@ -237,9 +237,7 @@
     const auth = firebase.auth();
 
     // 🌟 複数のYouTube APIキーを配列で管理（自動ローテーション対応）
-    // ※v2では実キーをファイルに残さない方針のためプレースホルダにしている。
-    //   運用時はここに自分のキー2本を入れること。
-    // v2.2変更：キーはファイルに書かず、設定タブで入力してこのブラウザのlocalStorageに保存する
+    // v2.2：実キーはファイルに書かず、⚙️設定タブで入力してこのブラウザのlocalStorageに保存する
     let YOUTUBE_API_KEYS = [];
     try {
       const savedYtKeys = JSON.parse(localStorage.getItem('youtube_api_keys') || '[]');
@@ -713,9 +711,10 @@ ${textToAnalyze}
       }
       div.dataset.first = firstType;
 
+      userNameById[userId] = author;
       div.innerHTML = `
         <div class="chat-main">
-          <span class="author" onclick="openModal('${userId}', '${escapeHtml(author)}')">${escapeHtml(author)}</span>
+          <span class="author" onclick="openModal('${userId}')">${escapeHtml(author)}</span>
           ${badgeHtml}:
           ${escapeHtml(message)}
         </div>
@@ -735,8 +734,13 @@ ${textToAnalyze}
       }
     }
 
+    // 表示名のレジストリ：モーダルを開くときは onclick にIDだけを渡し、名前はここから引く
+    // （表示名に引用符などが含まれていても、クリック処理が壊れないようにするため）
+    const userNameById = {};
+
     // v2追加：固定ストリップ（今日の初見・初コメ）
     function registerNewcomer(userId, name, type) {
+      userNameById[userId] = name;
       if (newcomers.some(n => n.userId === userId)) return;
       newcomers.push({ userId: userId, name: name, type: type });
       renderNewcomerStrip();
@@ -751,7 +755,7 @@ ${textToAnalyze}
       }
       strip.style.display = "block";
       const chips = newcomers.map(n =>
-        `<span class="newcomer-chip ${n.type === 'ever' ? 'ever' : ''}" onclick="openModal('${n.userId}', '${escapeHtml(n.name)}')">${n.type === 'ever' ? '🌟' : '☀️'} ${escapeHtml(n.name)}</span>`
+        `<span class="newcomer-chip ${n.type === 'ever' ? 'ever' : ''}" onclick="openModal('${n.userId}')">${n.type === 'ever' ? '🌟' : '☀️'} ${escapeHtml(n.name)}</span>`
       ).join('');
       strip.innerHTML = `<span class="strip-title">今日の初見・初コメ:</span>${chips}`;
     }
@@ -911,18 +915,19 @@ ${textToAnalyze}
           const photoHtml = data.photoUrl ? `<img src="${data.photoUrl}" class="listener-avatar">` : `<div class="listener-avatar" style="background:#eee; display:flex; align-items:center; justify-content:center; font-size:14px;">👤</div>`;
           const readingText = data.reading ? ` (${escapeHtml(data.reading)})` : "";
           const lastDate = data.lastSeenAt?.toDate ? data.lastSeenAt.toDate().toLocaleDateString() : "";
+          userNameById[doc.id] = data.name || "";
           const div = document.createElement("div");
           div.className = "listener-card";
           div.innerHTML = `
             ${photoHtml}
-            <div class="listener-info" onclick="openModal('${doc.id}', '${escapeHtml(data.name)}')">
+            <div class="listener-info" onclick="openModal('${doc.id}')">
               <strong>${escapeHtml(data.name)}${readingText}</strong>
               <div style="color:#666; font-size: 11px; margin-top: 2px;">
                 来訪: ${data.visitCount || 1}回 / コメ: ${data.commentCount || 0}回 | 最終: ${lastDate}
               </div>
               ${data.memo ? `<div style="color:#555; font-size:11px;">📝 ${escapeHtml(data.memo)}</div>` : ''}
             </div>
-            <button onclick="openModal('${doc.id}', '${escapeHtml(data.name)}')" style="background:#eee; width: auto; padding: 4px 8px; font-size: 11px;">編集</button>
+            <button onclick="openModal('${doc.id}')" style="background:#eee; width: auto; padding: 4px 8px; font-size: 11px;">編集</button>
           `;
           area.appendChild(div);
         });
@@ -933,12 +938,15 @@ ${textToAnalyze}
 
     async function openModal(userId, userName) {
       document.getElementById("modal-user-id").value = userId;
-      document.getElementById("modal-user-name").innerText = userName;
+      document.getElementById("modal-user-name").innerText = userName || userNameById[userId] || "";
 
       try {
         const doc = await db.collection("users").doc(userId).get();
         if (doc.exists) {
           const data = doc.data();
+          if (!userName && !userNameById[userId] && data.name) {
+            document.getElementById("modal-user-name").innerText = data.name;
+          }
           document.getElementById("modal-reading").value = data.reading || "";
           document.getElementById("modal-memo").value = data.memo || "";
         }
